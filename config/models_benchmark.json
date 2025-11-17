@@ -1,0 +1,42 @@
+{
+  "phi3:3.8b": {
+    "accuracy": 0.69,
+    "mmlu": 0.69,
+    "description": "Best quality/size ratio"
+  },
+  "mistral:7b": {
+    "accuracy": 0.82,
+    "mmlu": 0.82,
+    "description": "Balanced performance"
+  },
+  "llama3.1:8b": {
+    "accuracy": 0.845,
+    "mmlu": 0.845,
+    "description": "High quality responses"
+  },
+  "llama3.2:3b": {
+    "accuracy": 0.78,
+    "mmlu": 0.78,
+    "description": "Good general purpose"
+  },
+  "gemma2:2b": {
+    "accuracy": 0.75,
+    "mmlu": 0.75,
+    "description": "Multilingual support"
+  },
+  "qwen2.5:7b": {
+    "accuracy": 0.84,
+    "mmlu": 0.84,
+    "description": "Strong reasoning"
+  },
+  "codellama:13b": {
+    "accuracy": 0.80,
+    "mmlu": 0.80,
+    "description": "Code generation"
+  },
+  "vicuna:13b": {
+    "accuracy": 0.76,
+    "mmlu": 0.76,
+    "description": "General purpose"
+  }
+}
