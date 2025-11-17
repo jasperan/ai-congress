@@ -1,0 +1,25 @@
+Priority,Component,Task,Dependencies,Estimated Hours
+1,Setup,Create project structure following best practices,None,2
+1,Setup,Setup requirements.txt with all dependencies,None,1
+1,Setup,Configure config.yaml for default settings,None,1
+2,Core,Implement OllamaClient wrapper for API calls,ollama-python,3
+2,Core,Build ModelRegistry to track available models,OllamaClient,4
+2,Core,Create VotingEngine with weighted majority vote,None,5
+2,Core,Build SwarmOrchestrator for concurrent requests,"asyncio, OllamaClient",6
+3,API,Setup FastAPI application structure,FastAPI,2
+3,API,Implement REST endpoints for model management,"FastAPI, ModelRegistry",4
+3,API,Create WebSocket endpoint for streaming chat,FastAPI WebSockets,5
+3,API,Integrate SwarmOrchestrator with API,SwarmOrchestrator,4
+4,Frontend,Setup Svelte project with Vite and Tailwind,"Svelte, Vite, Tailwind",3
+4,Frontend,Create ChatInterface component,Svelte,6
+4,Frontend,Build ModelSelector with checkboxes,Svelte,4
+4,Frontend,Implement WebSocket client for streaming,WebSocket API,4
+4,Frontend,Create VotingVisualization component,"Svelte, D3.js optional",5
+5,CLI,Setup CLI with Click/Typer and Rich,"Click, Rich",3
+5,CLI,Implement interactive chat command,"Rich, SwarmOrchestrator",4
+5,CLI,Add verbose logging modes,"Rich, logging",2
+5,CLI,Create model management commands,ModelRegistry,3
+6,Testing,Write unit tests for VotingEngine,pytest,4
+6,Testing,Write integration tests for API,"pytest, FastAPI TestClient",5
+6,Deployment,Create Dockerfile and docker-compose.yml,Docker,3
+6,Deployment,Write comprehensive README.md,None,2

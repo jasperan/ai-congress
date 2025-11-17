@@ -1,0 +1,84 @@
+# AI Congress Configuration
+
+# Ollama Settings
+ollama:
+  base_url: "http://localhost:11434"
+  timeout: 120
+  max_retries: 3
+
+# Swarm Settings
+swarm:
+  # Swarm modes: "multi_model", "multi_request", "hybrid"
+  default_mode: "multi_model"
+
+  # Multi-request settings (temperature sampling)
+  multi_request:
+    num_requests: 5
+    temperature_range: [0.3, 0.7, 1.0, 1.2]
+
+  # Concurrency settings
+  max_concurrent_requests: 10
+  request_timeout: 60
+
+# Voting Configuration
+voting:
+  # Voting algorithms: "weighted_majority", "majority", "confidence_based", "boosting"
+  default_algorithm: "weighted_majority"
+
+  # Minimum agreement threshold (0.0 - 1.0)
+  consensus_threshold: 0.6
+
+  # Enable similarity clustering for responses
+  enable_clustering: true
+
+# Model Configuration
+models:
+  # Preferred lightweight models (priority order)
+  preferred:
+    - "phi3:3.8b"
+    - "mistral:7b"
+    - "llama3.2:3b"
+    - "gemma2:2b"
+    - "qwen2.5:7b"
+
+  # Model performance weights (can be auto-updated from benchmarks)
+  weights:
+    "phi3:3.8b": 0.85
+    "mistral:7b": 0.82
+    "llama3.2:3b": 0.78
+    "gemma2:2b": 0.75
+    "qwen2.5:7b": 0.84
+
+# API Settings
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  workers: 4
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+
+# CLI Settings
+cli:
+  # Verbosity levels: 0=minimal, 1=normal, 2=verbose, 3=debug
+  default_verbosity: 2
+
+  # Rich formatting
+  use_colors: true
+  panel_style: "bold cyan"
+
+  # Auto-save conversations
+  save_history: true
+  history_file: "~/.ai_congress_history"
+
+# Database
+database:
+  url: "sqlite+aiosqlite:///./ai_congress.db"
+  echo: false
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/ai_congress.log"
