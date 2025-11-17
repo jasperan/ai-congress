@@ -766,7 +766,8 @@ async def generate_image(request: ImageGenRequest):
         if image_generator is None:
             image_generator = get_image_generator(
                 model=config.image_gen.model,
-                output_dir=config.image_gen.output_dir
+                output_dir=config.image_gen.output_dir,
+                device=config.image_gen.device
             )
         
         result = await image_generator.generate_image(

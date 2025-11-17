@@ -46,7 +46,10 @@ If you're using a remote Ollama server (e.g., with GPU), set up models on the se
 
 ### Local Setup (3 Steps)
 1. **Install Dependencies**: `./startup.sh` (installs Python deps, sets up frontend, pulls models if local Ollama)
-2. **Start Backend**: `uvicorn src.ai_congress.api.main:app --reload` (runs API on :8000)
+2. **Start Backend**: 
+   - **Verbose mode** (recommended for development): `python run_server.py` 
+   - **Simple mode**: `uvicorn src.ai_congress.api.main:app --reload`
+   - Runs API on :8000 with detailed request/response logging
 3. **Start Frontend**: `cd frontend && npm run dev` (runs UI on :3000)
 
 > **Note**: The frontend now features a beautiful Open WebUI-inspired interface with:

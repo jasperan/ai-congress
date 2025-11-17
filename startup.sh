@@ -54,8 +54,7 @@ if [[ $OLLAMA_URL == *"localhost"* ]] || [[ $OLLAMA_URL == *"127.0.0.1"* ]]; the
     pull_model "deepseek-r1:1.5b"
     pull_model "qwen3:0.6b"
     
-    echo "🎨 Pulling Stable Diffusion for image generation..."
-    pull_model "stable-diffusion"
+    echo "🎨 Stable Diffusion will be downloaded from Hugging Face on first use..."
     
     # Setup Whisper for voice input
     setup_whisper
@@ -66,5 +65,6 @@ else
 fi
 
 echo "✅ Setup complete! Run the following:"
-echo "  Backend: uvicorn src.ai_congress.api.main:app --reload"
+echo "  Backend: python run_server.py   (verbose uvicorn with detailed logging)"
+echo "  Backend (simple): uvicorn src.ai_congress.api.main:app --reload"
 echo "  Frontend: cd frontend && npm run dev"
