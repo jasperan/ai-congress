@@ -303,9 +303,10 @@
 
       <!-- Vote Breakdown -->
       {#if currentResult.vote_breakdown || currentResult.confidence}
-        <VoteBreakdown 
+        <VoteBreakdown
           voteBreakdown={currentResult.vote_breakdown || {}}
           confidence={currentResult.confidence || 0}
+          semanticConfidence={currentResult.semantic_confidence}
         />
       {/if}
 
