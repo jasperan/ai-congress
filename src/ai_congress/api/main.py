@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import asyncio
 import logging
+import json
+import os
 from pydantic import BaseModel
 
 from ..core.model_registry import ModelRegistry
@@ -49,12 +51,48 @@ class ChatRequest(BaseModel):
     temperature: float = 0.7
     temperatures: Optional[List[float]] = None
     system_prompt: Optional[str] = None
+    personalities: Optional[List[str]] = None  # For personality mode
 
 
 class ModelInfo(BaseModel):
     name: str
     size: int
     weight: float
+
+
+class Personality(BaseModel):
+    name: str
+    system_prompt: str
+
+
+class PersonalityCreate(BaseModel):
+    name: str
+    system_prompt: str
+
+
+async def load_personalities() -> List[dict]:
+    """Load predefined and custom personalities"""
+    personalities = []
+
+    # Load predefined
+    predefined_file = "config/personalities.json"
+    if os.path.exists(predefined_file):
+        try:
+            with open(predefined_file, 'r') as f:
+                personalities.extend(json.load(f))
+        except Exception as e:
+            logger.error(f"Error loading predefined personalities: {e}")
+
+    # Load custom
+    custom_file = "personalities/custom_personalities.json"
+    if os.path.exists(custom_file):
+        try:
+            with open(custom_file, 'r') as f:
+                personalities.extend(json.load(f))
+        except Exception as e:
+            logger.error(f"Error loading custom personalities: {e}")
+
+    return personalities
 
 
 @app.on_event("startup")
@@ -112,6 +150,23 @@ async def chat(request: ChatRequest):
                 prompt=request.prompt,
                 temperatures=temps,
                 system_prompt=request.system_prompt
+            )
+        elif request.mode == "personality":
+            if not request.personalities:
+                raise HTTPException(status_code=400, detail="Personalities required for personality mode")
+            # Load personalities
+            personalities_data = await load_personalities()
+            selected_personalities = [
+                p for p in personalities_data
+                if p['name'] in request.personalities
+            ]
+            if not selected_personalities:
+                raise HTTPException(status_code=400, detail="No valid personalities selected")
+            result = await swarm.personality_swarm(
+                personalities=selected_personalities,
+                prompt=request.prompt,
+                base_model=config.agents.base_model,
+                temperature=request.temperature
             )
         else:
             raise HTTPException(status_code=400, detail="Invalid mode")
@@ -194,6 +249,49 @@ async def pull_model(model_name: str):
         return {"message": f"Model {model_name} pulled successfully"}
     else:
         raise HTTPException(status_code=500, detail="Failed to pull model")
+
+
+@app.get("/api/personalities", response_model=List[Personality])
+async def list_personalities():
+    """List all available personalities (predefined and custom)"""
+    personalities = await load_personalities()
+    return [Personality(**p) for p in personalities]
+
+
+@app.post("/api/personalities", response_model=Personality)
+async def create_personality(personality: PersonalityCreate):
+    """Create a new custom personality"""
+    custom_file = "personalities/custom_personalities.json"
+
+    # Ensure directory exists
+    os.makedirs("personalities", exist_ok=True)
+
+    # Load existing custom personalities
+    custom_personalities = []
+    if os.path.exists(custom_file):
+        try:
+            with open(custom_file, 'r') as f:
+                custom_personalities = json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading custom personalities: {e}")
+
+    # Check for duplicate name
+    if any(p['name'] == personality.name for p in custom_personalities):
+        raise HTTPException(status_code=400, detail="Personality name already exists")
+
+    # Add new personality
+    new_personality = {"name": personality.name, "system_prompt": personality.system_prompt}
+    custom_personalities.append(new_personality)
+
+    # Save back to file
+    try:
+        with open(custom_file, 'w') as f:
+            json.dump(custom_personalities, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving custom personalities: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save personality")
+
+    return Personality(**new_personality)
 
 
 @app.get("/health")
