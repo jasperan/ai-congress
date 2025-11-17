@@ -6,7 +6,11 @@ from typing import Dict, List, Optional, Any
 import ollama
 import logging
 
+from ..utils.logger import debug_action, error_message, truncate_text
+from ..utils.config_loader import load_config
+
 logger = logging.getLogger(__name__)
+config = load_config()
 
 
 class OllamaClient:
@@ -49,15 +53,24 @@ class OllamaClient:
     ) -> Dict:
         """Send chat request to model"""
         try:
+            # Log the API call
+            prompt_preview = truncate_text(messages[-1]['content'] if messages else "", 50)
+            debug_action("OLLAMA_CALL", model, f"Initiating chat: {prompt_preview}...", config.logging.verbosity)
+
             response = await self.client.chat(
                 model=model,
                 messages=messages,
                 options=options or {},
                 stream=stream
             )
+
+            # Log successful response
+            content = response.get('message', {}).get('content', '')
+            debug_action("OLLAMA_RESPONSE", model, f"Generated: {truncate_text(content, 80)}", config.logging.verbosity)
+
             return response
         except Exception as e:
-            logger.error(f"Error in chat with {model}: {e}")
+            error_message("OLLAMA_ERROR", model, f"Chat failed: {str(e)}")
             return {'message': {'content': ''}, 'error': str(e)}
 
     async def generate(

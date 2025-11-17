@@ -68,6 +68,64 @@ class AgentsConfig(BaseModel):
     base_model: str = "mistral:7b"
 
 
+class OracleDBConfig(BaseModel):
+    user: str = "admin"
+    password: str = "your_password_here"
+    dsn: str = "localhost:1521/FREEPDB1"
+    use_tls: bool = True
+    vector_table: str = "document_vectors"
+    embedding_dimension: int = 384
+    enable_cache: bool = True
+    cache_size: int = 1000
+    cache_ttl: int = 3600  # seconds
+    batch_size: int = 100
+
+
+class RAGConfig(BaseModel):
+    enabled: bool = True
+    auto_on_upload: bool = True
+    top_k: int = 10
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    chunk_size: int = 512
+    chunk_overlap: int = 50
+    min_chunk_size: int = 100
+    adaptive_chunking: bool = True  # Use semantic-aware chunking
+
+
+class VoiceConfig(BaseModel):
+    model: str = "base"
+    language: str = "en"
+    device: str = "cpu"
+    compute_type: str = "int8"
+
+
+class WebSearchConfig(BaseModel):
+    default_engine: str = "duckduckgo"  # duckduckgo, searxng, yacy
+    max_results: int = 5
+    timeout: int = 10
+    # Optional SearXNG instance URL (self-hosted)
+    searxng_url: str = ""  # e.g., "http://localhost:8080"
+    # Optional Yacy instance URL (self-hosted)
+    yacy_url: str = ""  # e.g., "http://localhost:8090"
+
+
+class DocumentExtractionConfig(BaseModel):
+    use_advanced_extractors: bool = False
+    # Apache Tika server URL (optional, docker: apache/tika)
+    tika_url: str = ""  # e.g., "http://localhost:9998"
+    # Docling server URL (optional, docker: quay.io/docling-project/docling-serve)
+    docling_url: str = ""  # e.g., "http://localhost:5001"
+    prefer: str = "docling"  # preferred extractor: docling or tika
+
+
+class ImageGenConfig(BaseModel):
+    model: str = "stable-diffusion"
+    default_steps: int = 30
+    width: int = 512
+    height: int = 512
+    output_dir: str = "static/generated_images"
+
+
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
@@ -78,6 +136,12 @@ class Config(BaseModel):
     cli: CLIConfig = Field(default_factory=CLIConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    oracle_db: OracleDBConfig = Field(default_factory=OracleDBConfig)
+    rag: RAGConfig = Field(default_factory=RAGConfig)
+    voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    image_gen: ImageGenConfig = Field(default_factory=ImageGenConfig)
+    document_extraction: DocumentExtractionConfig = Field(default_factory=DocumentExtractionConfig)
 
 
 def load_config(config_file: str = "config/config.yaml") -> Config:

@@ -90,33 +90,63 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
     async def query_model(
         self,
         model_name: str,
-        prompt: str,
+        prompt: str = "",
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
-        stream: bool = False
+        messages: Optional[List[Dict[str, str]]] = None,
+        stream: bool = False,
+        update_callback: Optional[callable] = None,
+        entity_name: Optional[str] = None
     ) -> Dict:
         """Query a single model asynchronously"""
         try:
-            messages = []
-            if system_prompt:
-                messages.append({'role': 'system', 'content': system_prompt})
-            messages.append({'role': 'user', 'content': prompt})
+            if messages is None:
+                messages = []
+                if system_prompt:
+                    messages.append({'role': 'system', 'content': system_prompt})
+                messages.append({'role': 'user', 'content': prompt})
 
             logger.debug(f"Querying {model_name} with temperature {temperature}")
 
-            response = await self.ollama_client.chat(
-                model=model_name,
-                messages=messages,
-                options={'temperature': temperature},
-                stream=stream
-            )
-
-            return {
-                'model': model_name,
-                'response': response['message']['content'],
-                'temperature': temperature,
-                'success': True
-            }
+            if stream:
+                response_text = ""
+                if update_callback:
+                    update_callback('start', entity_name or model_name)
+                async for chunk in await self.ollama_client.chat(
+                    model=model_name,
+                    messages=messages,
+                    options={'temperature': temperature},
+                    stream=True
+                ):
+                    content = chunk['message']['content']
+                    response_text += content
+                    if update_callback:
+                        update_callback('chunk', entity_name or model_name, content, response_text)
+                if update_callback:
+                    update_callback('complete', entity_name or model_name, response_text)
+                return {
+                    'model': model_name,
+                    'response': response_text,
+                    'temperature': temperature,
+                    'success': True
+                }
+            else:
+                if update_callback:
+                    update_callback('start', entity_name or model_name)
+                response = await self.ollama_client.chat(
+                    model=model_name,
+                    messages=messages,
+                    options={'temperature': temperature},
+                    stream=False
+                )
+                if update_callback:
+                    update_callback('complete', entity_name or model_name, response['message']['content'])
+                return {
+                    'model': model_name,
+                    'response': response['message']['content'],
+                    'temperature': temperature,
+                    'success': True
+                }
 
         except Exception as e:
             logger.error(f"Error querying {model_name}: {e}")
@@ -397,7 +427,10 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         personalities: List[Dict[str, str]],
         prompt: str,
         base_model: str,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        history: Optional[List[Dict[str, str]]] = None,
+        stream: bool = False,
+        update_callback: Optional[callable] = None
     ) -> Dict:
         """
         Query the same base model multiple times with different personality system prompts
@@ -406,6 +439,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             personalities: List of {'name': str, 'system_prompt': str}
             prompt: User prompt
             base_model: Base model to use for all personalities
+            history: Optional conversation history as list of {'role': 'user'|'assistant', 'content': str}
 
         Returns:
             Similar structure to multi_model_swarm
@@ -416,19 +450,49 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         status_items = [[p['name'], "Queued"] for p in personalities]
         swarm_status_panel("Personality Swarm Status", status_items, ["Personality", "Status"], config.logging.verbosity)
 
-        # Create concurrent tasks, each with different system prompt
-        tasks = [
-            self.query_model(base_model, prompt, temperature, personality['system_prompt'])
-            for personality in personalities
-        ]
+        # Send initial status if callback provided
+        if update_callback:
+            for p in personalities:
+                update_callback('init', p['name'], 'Queued')
 
-        # Execute all queries concurrently
-        responses = await asyncio.gather(*tasks)
+        # Create concurrent tasks, each with different system prompt and full message history
+        async def query_personality(personality: Dict[str, str]):
+            # Build full messages: system + history + current user prompt
+            messages = [{"role": "system", "content": personality['system_prompt']}]
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": prompt})
 
-        # Add personality names to responses for display
-        for i, response in enumerate(responses):
-            if i < len(personalities):
-                response['personality_name'] = personalities[i]['name']
+            entity_callback = lambda type, name, content, full: update_callback(type, personality['name'], content, full) if update_callback else None
+
+            return await self.query_model(
+                base_model,
+                temperature=temperature,
+                messages=messages,
+                stream=stream,
+                update_callback=entity_callback,
+                entity_name=personality['name']
+            )
+
+        # Create concurrent tasks
+        tasks = [query_personality(personality) for personality in personalities]
+
+        # Execute all queries concurrently with semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(self.max_concurrent)
+
+        async def limited_query(task):
+            async with semaphore:
+                return await task
+
+        # Use as_completed for live updates
+        responses = []
+        task_to_personality = {limited_query(task): personality for task, personality in zip(tasks, personalities)}
+
+        for coro in asyncio.as_completed(list(task_to_personality.keys())):
+            personality = task_to_personality[coro]
+            response = await coro
+            response['personality_name'] = personality['name']
+            responses.append(response)
 
         # Filter successful responses
         successful = [r for r in responses if r['success']]
