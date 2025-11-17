@@ -25,10 +25,10 @@ class ModelRegistry:
     async def list_available_models(self) -> List[Dict]:
         """List all available Ollama models"""
         try:
-            models_response = await self.ollama_client.list()
+            models_response = await self.ollama_client.list_models()
             models = []
 
-            for model in models_response.get('models', []):
+            for model in models_response:
                 model_info = {
                     'name': model['name'],
                     'size': model.get('size', 0),
@@ -90,13 +90,13 @@ class ModelRegistry:
         try:
             logger.info(f"Pulling model: {model_name}")
 
-            async for progress in await self.ollama_client.pull(model_name, stream=True):
-                status = progress.get('status', '')
-                if 'completed' in status.lower():
-                    logger.info(f"Model {model_name} pulled successfully")
+            success = await self.ollama_client.pull_model(model_name)
+            if success:
+                logger.info(f"Model {model_name} pulled successfully")
+                await self.list_available_models()  # Refresh cache
+                return True
 
-            await self.list_available_models()  # Refresh cache
-            return True
+            return False
 
         except Exception as e:
             logger.error(f"Error pulling model {model_name}: {e}")
