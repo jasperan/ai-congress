@@ -37,6 +37,7 @@ def chat(
     models: List[str] = typer.Option(["phi3:3.8b", "mistral:7b"], "--model", "-m", help="Models to use in swarm"),
     mode: str = typer.Option("multi_model", "--mode", help="Swarm mode: multi_model, multi_request, hybrid"),
     temperature: float = typer.Option(0.7, "--temp", "-t", help="Temperature for models"),
+    stream: bool = typer.Option(False, "--stream", "-s", help="Stream responses in real-time"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
     """Interactive chat with LLM swarm"""
@@ -69,7 +70,8 @@ def chat(
                     result = await swarm.hybrid_swarm(
                         models=models,
                         prompt=prompt,
-                        temperatures=[0.5, 0.9]
+                        temperatures=[0.5, 0.9],
+                        stream=stream
                     )
 
                 progress.update(task, completed=True)

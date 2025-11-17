@@ -19,6 +19,7 @@ class OllamaConfig(BaseModel):
 class SwarmConfig(BaseModel):
     default_mode: str = "multi_model"
     multi_request: Dict[str, Any] = Field(default_factory=lambda: {"temperatures": [0.3, 0.7, 1.0, 1.2]})
+    hybrid: Dict[str, Any] = Field(default_factory=lambda: {"temperatures": [0.5, 0.9], "top_models": 8, "streaming": False})
     max_concurrent_requests: int = 10
     request_timeout: int = 60
 

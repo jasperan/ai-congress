@@ -7,10 +7,13 @@
 
   let prompt = ''
   let mode = 'multi_model'
+  let streamResponses = false
   let messages = []
   let isLoading = false
   let showResponses = false
   let currentResult = null
+  let websocket = null
+  let streamingMessage = null
 
   async function sendMessage() {
     if (!prompt.trim() || selectedModels.length === 0) {
@@ -24,36 +27,113 @@
     const currentPrompt = prompt
     prompt = ''
 
+    // Initialize streaming message
+    streamingMessage = {
+      role: 'assistant',
+      content: '',
+      result: null,
+      timestamp: Date.now(),
+      isStreaming: true
+    }
+    messages = [...messages, streamingMessage]
+
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: currentPrompt,
-          models: selectedModels,
-          mode
+      if (streamResponses) {
+        // Use WebSocket for streaming
+        websocket = new WebSocket(`ws://${window.location.host}/ws/chat`)
+
+        websocket.onopen = () => {
+          websocket.send(JSON.stringify({
+            prompt: currentPrompt,
+            models: selectedModels,
+            mode: mode,
+            stream: true
+          }))
+        }
+
+        websocket.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+
+          if (data.type === 'start') {
+            // Update loading message
+            streamingMessage.content = data.message
+            messages = [...messages]
+          } else if (data.type === 'model_response') {
+            // Append model response info
+            streamingMessage.content += `\n\n**${data.model}:** ${data.content}`
+            messages = [...messages]
+          } else if (data.type === 'final_answer') {
+            // Final result
+            streamingMessage.content = data.content
+            streamingMessage.result = {
+              confidence: data.confidence,
+              semantic_confidence: data.semantic_confidence,
+              vote_breakdown: data.vote_breakdown,
+              responses: [] // Will be populated if available
+            }
+            currentResult = streamingMessage.result
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            websocket.close()
+            websocket = null
+          } else if (data.type === 'error') {
+            streamingMessage.content = `Error: ${data.message}`
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            websocket.close()
+            websocket = null
+          }
+        }
+
+        websocket.onerror = (error) => {
+          console.error('WebSocket error:', error)
+          streamingMessage.content = 'Connection error occurred'
+          streamingMessage.isStreaming = false
+          messages = [...messages]
+          if (websocket) {
+            websocket.close()
+            websocket = null
+          }
+        }
+
+        websocket.onclose = () => {
+          isLoading = false
+          websocket = null
+        }
+      } else {
+        // Use HTTP for non-streaming
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: currentPrompt,
+            models: selectedModels,
+            mode
+          })
         })
-      })
 
-      const result = await response.json()
-      currentResult = result
+        const result = await response.json()
+        currentResult = result
 
-      messages = [...messages, { 
-        role: 'assistant', 
-        content: result.final_answer,
-        result: result,
-        timestamp: Date.now()
-      }]
+        // Update the streaming message with final content
+        streamingMessage.content = result.final_answer
+        streamingMessage.result = result
+        streamingMessage.isStreaming = false
+        messages = [...messages]
+        isLoading = false
+      }
     } catch (e) {
       console.error('Error:', e)
-      messages = [...messages, { 
-        role: 'assistant', 
-        content: 'Error: ' + e.message,
-        timestamp: Date.now()
-      }]
-    }
+      streamingMessage.content = 'Error: ' + e.message
+      streamingMessage.isStreaming = false
+      messages = [...messages]
+      isLoading = false
 
-    isLoading = false
+      if (websocket) {
+        websocket.close()
+        websocket = null
+      }
+    }
   }
 
   function toggleModel(modelName) {
@@ -115,19 +195,35 @@
     </div>
 
     <!-- Mode Selector -->
-    <div class="flex items-center space-x-4">
-      <label for="swarm-mode" class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-        Swarm Mode:
-      </label>
-      <select 
-        id="swarm-mode"
-        bind:value={mode} 
-        class="input-field text-sm py-2 w-auto"
-      >
-        <option value="multi_model">🔄 Multi-Model (Different Models)</option>
-        <option value="multi_request">🌡️ Multi-Request (Temperature Variation)</option>
-        <option value="hybrid">⚡ Hybrid (Both)</option>
-      </select>
+    <div class="flex items-center space-x-6">
+      <div class="flex items-center space-x-4">
+        <label for="swarm-mode" class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          Swarm Mode:
+        </label>
+        <select
+          id="swarm-mode"
+          bind:value={mode}
+          class="input-field text-sm py-2 w-auto"
+        >
+          <option value="multi_model">🔄 Multi-Model (Different Models)</option>
+          <option value="multi_request">🌡️ Multi-Request (Temperature Variation)</option>
+          <option value="hybrid">⚡ Hybrid (Both)</option>
+        </select>
+      </div>
+
+      <!-- Streaming Toggle -->
+      <div class="flex items-center space-x-2">
+        <input
+          id="stream-toggle"
+          type="checkbox"
+          bind:checked={streamResponses}
+          class="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500
+                 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+        />
+        <label for="stream-toggle" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Stream Responses
+        </label>
+      </div>
     </div>
   </div>
 

@@ -6,10 +6,12 @@ from typing import List, Dict, Optional
 from .voting_engine import VotingEngine
 from .model_registry import ModelRegistry
 from .ollama_client import OllamaClient
-from ..utils.config_loader import OllamaConfig
+from ..utils.config_loader import OllamaConfig, load_config
+from ..utils.logger import debug_action, info_message, swarm_status_panel, truncate_text, error_message
 import logging
 
 logger = logging.getLogger(__name__)
+config = load_config()
 
 
 class SwarmOrchestrator:
@@ -90,7 +92,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         model_name: str,
         prompt: str,
         temperature: float = 0.7,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        stream: bool = False
     ) -> Dict:
         """Query a single model asynchronously"""
         try:
@@ -104,7 +107,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             response = await self.ollama_client.chat(
                 model=model_name,
                 messages=messages,
-                options={'temperature': temperature}
+                options={'temperature': temperature},
+                stream=stream
             )
 
             return {
@@ -242,42 +246,74 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
 
     async def hybrid_swarm(
         self,
-        models: List[str],
-        prompt: str,
-        temperatures: List[float] = [0.5, 0.9],
-        system_prompt: Optional[str] = None
+        models: Optional[List[str]] = None,
+        prompt: str = "",
+        temperatures: Optional[List[float]] = None,
+        system_prompt: Optional[str] = None,
+        stream: bool = False
     ) -> Dict:
         """
         Hybrid: Multiple models, each queried with multiple temperatures
 
         This is the most comprehensive swarm mode
         """
-        logger.info(f"Starting hybrid swarm: {len(models)} models x {len(temperatures)} temps")
+        # Load config for defaults
+        if models is None:
+            models = self.model_registry.get_top_models(config.swarm.hybrid['top_models'])
+        if temperatures is None:
+            temperatures = config.swarm.hybrid['temperatures']
 
-        # Create all combinations
-        tasks = []
+        info_message("SWARM_START", f"Hybrid Swarm ({len(models)} models × {len(temperatures)} temps)", f"Using top {len(models)} models", config.logging.verbosity)
+
+        # Create entity names for display (model@temp combinations)
+        entities = []
         for model in models:
             for temp in temperatures:
-                tasks.append(self.query_model(model, prompt, temp, system_prompt))
+                entities.append(f"{model}@{temp}")
+
+        # Show swarm status panel
+        status_items = [[entity, "Queued"] for entity in entities]
+        swarm_status_panel("Hybrid Swarm Status", status_items, ["Model/Temp", "Status"], config.logging.verbosity)
+
+        # Create all combinations
+        task_list = []
+        for model in models:
+            for temp in temperatures:
+                task_list.append((model, temp))
 
         # Execute all concurrently with semaphore to limit concurrency
         semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        async def limited_query(task):
+        async def limited_query(model, temp):
             async with semaphore:
-                return await task
+                return await self.query_model(model, prompt, temp, system_prompt, stream=stream)
 
-        responses = await asyncio.gather(*[limited_query(task) for task in tasks])
+        # Execute all concurrently
+        tasks = [limited_query(model, temp) for model, temp in task_list]
+        responses = await asyncio.gather(*tasks)
 
-        # Process results
+        # Add entity names to responses for display
+        for i, response in enumerate(responses):
+            if i < len(entities):
+                response['entity_name'] = entities[i]
+
+        # Filter successful responses
         successful = [r for r in responses if r['success']]
 
         if not successful:
+            error_message("SWARM_ERROR", "Hybrid Swarm", "No successful responses from any model-temperature combination", config.logging.verbosity)
             return {
                 'responses': responses,
-                'final_answer': "Error: No successful responses",
-                'confidence': 0.0
+                'final_answer': "Error: No models responded successfully",
+                'confidence': 0.0,
+                'semantic_confidence': 0.0,
+                'vote_breakdown': {}
             }
+
+        # Log successful generations
+        for resp in successful:
+            entity_name = resp.get('entity_name', f'Unknown@{resp.get("temperature", 0.7)}')
+            debug_action("GENERATED", entity_name, f"Response: {truncate_text(resp['response'], 80)}", config.logging.verbosity)
 
         # Weight by both model performance and temperature
         weights = []
@@ -287,17 +323,24 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             combined_weight = model_weight * temp_weight
             weights.append(combined_weight)
 
+        # Vote on best response
         texts = [r['response'] for r in successful]
-        model_names = [f"{r['model']}@{r['temperature']}" for r in successful]
+        entity_names = [r.get('entity_name', f"{r['model']}@{r['temperature']}") for r in successful]
+
+        debug_action("VOTING", f"Hybrid Swarm ({len(successful)} responses)", "Aggregating responses with weighted majority vote", config.logging.verbosity)
 
         final_answer, confidence, vote_breakdown = self.voting_engine.weighted_majority_vote(
-            texts, weights, model_names
+            texts, weights, entity_names
         )
 
         # Compute semantic confidence
-        semantic_confidence = await self.semantic_confidence(texts, model_names, prompt)
+        semantic_confidence = await self.semantic_confidence(texts, entity_names, prompt)
 
-        logger.info(f"Hybrid swarm completed. String Confidence: {confidence:.2f}, Semantic Confidence: {semantic_confidence:.2f}")
+        info_message("SWARM_COMPLETE", "Hybrid Swarm", f"Confidence: {confidence:.2f}, Semantic: {semantic_confidence:.2f}", config.logging.verbosity)
+
+        # Update status panel with results
+        result_items = [[name, f"✓ ({vote_breakdown.get(name, 0):.1f} votes)"] for name in entity_names]
+        swarm_status_panel("Hybrid Swarm Results", result_items, ["Model/Temp", "Result"], config.logging.verbosity)
 
         return {
             'responses': responses,
@@ -305,8 +348,11 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             'confidence': confidence,
             'semantic_confidence': semantic_confidence,
             'vote_breakdown': vote_breakdown,
+            'models_used': models,
+            'temperatures_used': temperatures,
             'total_queries': len(tasks),
-            'successful_queries': len(successful)
+            'successful_queries': len(successful),
+            'weights': weights
         }
 
     async def stream_swarm_response(
@@ -364,7 +410,11 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         Returns:
             Similar structure to multi_model_swarm
         """
-        logger.info(f"Starting personality swarm with {len(personalities)} personalities using {base_model}")
+        info_message("SWARM_START", f"Personality Swarm ({len(personalities)} entities)", f"Using {base_model} at T={temperature}")
+
+        # Show swarm status panel
+        status_items = [[p['name'], "Queued"] for p in personalities]
+        swarm_status_panel("Personality Swarm Status", status_items, ["Personality", "Status"], config.logging.verbosity)
 
         # Create concurrent tasks, each with different system prompt
         tasks = [
@@ -375,11 +425,16 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         # Execute all queries concurrently
         responses = await asyncio.gather(*tasks)
 
+        # Add personality names to responses for display
+        for i, response in enumerate(responses):
+            if i < len(personalities):
+                response['personality_name'] = personalities[i]['name']
+
         # Filter successful responses
         successful = [r for r in responses if r['success']]
 
         if not successful:
-            logger.error("No successful responses from personality swarm")
+            error_message("SWARM_ERROR", "Personality Swarm", "No successful responses from any personality")
             return {
                 'responses': responses,
                 'final_answer': "Error: No personalities responded successfully",
@@ -388,12 +443,19 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                 'vote_breakdown': {}
             }
 
+        # Log successful generations
+        for i, resp in enumerate(successful):
+            personality_name = resp.get('model', f'Personality {i+1}')
+            debug_action("GENERATED", personality_name, f"Response: {truncate_text(resp['response'], 80)}", config.logging.verbosity)
+
         # Use equal weights for all personalities
         weights = [1.0] * len(successful)
 
         # Vote on best response
         texts = [r['response'] for r in successful]
         personality_names = [p['name'] for p in personalities[:len(successful)]]  # Match successful order
+
+        debug_action("VOTING", f"Personality Swarm ({len(successful)} responses)", "Aggregating responses with equal weights", config.logging.verbosity)
 
         final_answer, confidence, vote_breakdown = self.voting_engine.weighted_majority_vote(
             texts, weights, personality_names
@@ -402,7 +464,11 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         # Compute semantic confidence
         semantic_confidence = await self.semantic_confidence(texts, personality_names, prompt)
 
-        logger.info(f"Personality swarm completed. String Confidence: {confidence:.2f}, Semantic Confidence: {semantic_confidence:.2f}")
+        info_message("SWARM_COMPLETE", "Personality Swarm", f"Confidence: {confidence:.2f}, Semantic: {semantic_confidence:.2f}")
+
+        # Update status panel with results
+        result_items = [[name, f"✓ ({vote_breakdown.get(name, 0):.1f} votes)"] for name in personality_names]
+        swarm_status_panel("Personality Swarm Results", result_items, ["Personality", "Result"], config.logging.verbosity)
 
         return {
             'responses': responses,
