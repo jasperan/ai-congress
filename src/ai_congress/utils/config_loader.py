@@ -59,12 +59,19 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file: str = "logs/ai_congress.log"
+    rich: bool = True
+    verbosity: int = 2  # 0=minimal, 1=normal, 2=verbose, 3=debug
+
+
+class AgentsConfig(BaseModel):
+    base_model: str = "mistral:7b"
 
 
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
     voting: VotingConfig = Field(default_factory=VotingConfig)
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
     models: ModelWeights = Field(default_factory=ModelWeights)
     api: APIConfig = Field(default_factory=APIConfig)
     cli: CLIConfig = Field(default_factory=CLIConfig)
