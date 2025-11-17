@@ -274,87 +274,104 @@ class TextChunker:
         """
         Adaptive chunking that considers semantic boundaries
         Improves retrieval accuracy by maintaining context coherence
-        
+
         Args:
             text: Input text
             metadata: Optional metadata
-            
+
         Returns:
             List of DocumentChunk objects
         """
-        chunks = []
-        chunk_index = 0
-        
-        # First, split by paragraphs
-        paragraphs = self.paragraph_split.split(text)
-        
-        current_chunk = ""
-        current_start = 0
-        
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-            
-            # If adding this paragraph would exceed chunk size
-            if len(current_chunk) + len(para) > self.chunk_size:
-                # If current chunk is not empty, save it
-                if len(current_chunk) >= self.min_chunk_size:
-                    chunk_metadata = metadata.copy() if metadata else {}
-                    chunk_metadata['start_char'] = current_start
-                    chunk_metadata['end_char'] = current_start + len(current_chunk)
-                    chunk_metadata['chunking_strategy'] = 'adaptive'
-                    
-                    chunk = DocumentChunk(
-                        text=current_chunk.strip(),
-                        metadata=chunk_metadata,
-                        chunk_index=chunk_index
-                    )
-                    chunks.append(chunk)
-                    chunk_index += 1
-                    
-                    # Start new chunk with overlap
-                    overlap_text = self._get_overlap_text(current_chunk, self.chunk_overlap)
-                    current_start = current_start + len(current_chunk) - len(overlap_text)
-                    current_chunk = overlap_text
-                
-                # If paragraph itself is too large, split by sentences
-                if len(para) > self.chunk_size:
-                    sentence_chunks = self._chunk_by_sentences(
-                        para, 
-                        current_start,
-                        chunk_index,
-                        metadata
-                    )
-                    chunks.extend(sentence_chunks)
-                    chunk_index += len(sentence_chunks)
-                    current_chunk = ""
-                    current_start = current_start + len(para)
+        try:
+            print(f"[CHUNK] Starting adaptive chunking on text length: {len(text)}")
+            chunks = []
+            chunk_index = 0
+
+            # First, split by paragraphs
+            print("[CHUNK] Splitting by paragraphs...")
+            paragraphs = self.paragraph_split.split(text)
+            print(f"[CHUNK] Found {len(paragraphs)} paragraphs")
+
+            current_chunk = ""
+            current_start = 0
+
+            for i, para in enumerate(paragraphs):
+                para = para.strip()
+                if not para:
+                    continue
+
+                print(f"[CHUNK] Processing paragraph {i+1}: length {len(para)}")
+
+                # If adding this paragraph would exceed chunk size
+                if len(current_chunk) + len(para) > self.chunk_size:
+                    # If current chunk is not empty, save it
+                    if len(current_chunk) >= self.min_chunk_size:
+                        chunk_metadata = metadata.copy() if metadata else {}
+                        chunk_metadata['start_char'] = current_start
+                        chunk_metadata['end_char'] = current_start + len(current_chunk)
+                        chunk_metadata['chunking_strategy'] = 'adaptive'
+
+                        chunk = DocumentChunk(
+                            text=current_chunk.strip(),
+                            metadata=chunk_metadata,
+                            chunk_index=chunk_index
+                        )
+                        chunks.append(chunk)
+                        chunk_index += 1
+                        print(f"[CHUNK] Created chunk {chunk_index} (length {len(current_chunk)})")
+
+                        # Start new chunk with overlap
+                        overlap_text = self._get_overlap_text(current_chunk, self.chunk_overlap)
+                        current_start = current_start + len(current_chunk) - len(overlap_text)
+                        current_chunk = overlap_text
+
+                    # If paragraph itself is too large, split by sentences
+                    if len(para) > self.chunk_size:
+                        print(f"[CHUNK] Paragraph too large, splitting by sentences...")
+                        sentence_chunks = self._chunk_by_sentences(
+                            para,
+                            current_start,
+                            chunk_index,
+                            metadata
+                        )
+                        chunks.extend(sentence_chunks)
+                        chunk_index += len(sentence_chunks)
+                        print(f"[CHUNK] Created {len(sentence_chunks)} sentence chunks")
+                        current_chunk = ""
+                        current_start = current_start + len(para)
+                    else:
+                        current_chunk = para
                 else:
-                    current_chunk = para
-            else:
-                # Add paragraph to current chunk
-                if current_chunk:
-                    current_chunk += "\n\n" + para
-                else:
-                    current_chunk = para
-        
-        # Don't forget the last chunk
-        if len(current_chunk) >= self.min_chunk_size:
-            chunk_metadata = metadata.copy() if metadata else {}
-            chunk_metadata['start_char'] = current_start
-            chunk_metadata['end_char'] = current_start + len(current_chunk)
-            chunk_metadata['chunking_strategy'] = 'adaptive'
-            
-            chunk = DocumentChunk(
-                text=current_chunk.strip(),
-                metadata=chunk_metadata,
-                chunk_index=chunk_index
-            )
-            chunks.append(chunk)
-        
-        logger.info(f"Created {len(chunks)} adaptive chunks from text of length {len(text)}")
-        return chunks
+                    # Add paragraph to current chunk
+                    if current_chunk:
+                        current_chunk += "\n\n" + para
+                    else:
+                        current_chunk = para
+
+            # Don't forget the last chunk
+            if len(current_chunk) >= self.min_chunk_size:
+                chunk_metadata = metadata.copy() if metadata else {}
+                chunk_metadata['start_char'] = current_start
+                chunk_metadata['end_char'] = current_start + len(current_chunk)
+                chunk_metadata['chunking_strategy'] = 'adaptive'
+
+                chunk = DocumentChunk(
+                    text=current_chunk.strip(),
+                    metadata=chunk_metadata,
+                    chunk_index=chunk_index
+                )
+                chunks.append(chunk)
+                print(f"[CHUNK] Created final chunk {chunk_index+1} (length {len(current_chunk)})")
+
+            logger.info(f"Created {len(chunks)} adaptive chunks from text of length {len(text)}")
+            print(f"[CHUNK] Adaptive chunking completed: {len(chunks)} chunks")
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error in adaptive chunking: {e}")
+            print(f"[CHUNK] ERROR in adaptive chunking: {e}, falling back to simple chunking")
+            # Fallback to simple chunking
+            return self._simple_chunk(text, metadata)
     
     def _chunk_by_sentences(
         self,
@@ -620,4 +637,3 @@ class DocumentProcessor:
         
         logger.info(f"Processed document {file_path}: {len(chunks)} chunks (method: {extraction_method})")
         return text, chunks
-

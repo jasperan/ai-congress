@@ -78,11 +78,18 @@ class WebSearchEngine:
             
             logger.info(f"Searching web for: {query} (engine: {engine})")
             
-            # Route to appropriate search engine
+            # Route to appropriate search engine with fallback
+            results = []
             if engine == "searxng" and self.searxng_url:
                 results = await self._search_searxng(query, max_results, safesearch)
+                if not results:
+                    logger.warning("SearXNG search failed, falling back to DuckDuckGo")
+                    results = await self._search_duckduckgo(query, max_results, region, safesearch)
             elif engine == "yacy" and self.yacy_url:
                 results = await self._search_yacy(query, max_results)
+                if not results:
+                    logger.warning("Yacy search failed, falling back to DuckDuckGo")
+                    results = await self._search_duckduckgo(query, max_results, region, safesearch)
             else:
                 results = await self._search_duckduckgo(query, max_results, region, safesearch)
             
@@ -323,4 +330,3 @@ def get_web_search_engine(
         )
     
     return _web_search_engine
-

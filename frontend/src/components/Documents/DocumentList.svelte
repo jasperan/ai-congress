@@ -3,7 +3,9 @@
   
   export let onDocumentDeleted = () => {}
   export let refreshTrigger = 0
-  
+  export let selectedDocuments = []
+  export let onSelectionChanged = () => {}
+
   let documents = []
   let isLoading = false
   let errorMessage = ''
@@ -110,6 +112,20 @@
       {#each documents as doc}
         <div class="document-card">
           <div class="document-header">
+            <input
+              type="checkbox"
+              bind:checked={selectedDocuments.includes(doc.document_id)}
+              on:change={() => {
+                if (selectedDocuments.includes(doc.document_id)) {
+                  selectedDocuments = selectedDocuments.filter(id => id !== doc.document_id)
+                } else {
+                  selectedDocuments = [...selectedDocuments, doc.document_id]
+                }
+                onSelectionChanged()
+              }}
+              class="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500
+                     dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+            />
             <svg class="w-5 h-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
             </svg>
@@ -234,4 +250,3 @@
     cursor: not-allowed;
   }
 </style>
-

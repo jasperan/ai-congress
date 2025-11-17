@@ -139,27 +139,16 @@ class OracleVectorStore:
     def _init_connection(self):
         """Initialize database connection with TLS if enabled"""
         try:
-            # Configure TLS connection parameters
-            if self.use_tls:
-                # Enable TLS/SSL for Oracle connection
-                params = oracledb.ConnectParams()
-                params.ssl_server_dn_match = True
-                params.ssl_server_cert_dn = None
-                
-                self.connection = oracledb.connect(
-                    user=self.user,
-                    password=self.password,
-                    dsn=self.dsn,
-                    params=params
-                )
-            else:
-                self.connection = oracledb.connect(
-                    user=self.user,
-                    password=self.password,
-                    dsn=self.dsn
-                )
+            # The DSN connection string already contains TLS/security settings
+            # For Oracle Cloud (Autonomous DB), the DSN includes: (security=(ssl_server_dn_match=yes))
+            # So we can connect directly using the DSN
+            self.connection = oracledb.connect(
+                user=self.user,
+                password=self.password,
+                dsn=self.dsn
+            )
             
-            logger.info(f"Connected to Oracle Database at {self.dsn}")
+            logger.info(f"Connected to Oracle Database {'(TLS enabled)' if self.use_tls else ''}")
             
         except Exception as e:
             logger.error(f"Failed to connect to Oracle Database: {e}")
@@ -262,7 +251,7 @@ class OracleVectorStore:
                     document_id,
                     i,
                     chunk,
-                    json.dumps(embedding_list),
+                    embedding_list,
                     metadata_json
                 ])
             
@@ -319,7 +308,7 @@ class OracleVectorStore:
                 FETCH FIRST :2 ROWS ONLY
             """
             
-            cursor.execute(search_sql, [json.dumps(query_list), top_k])
+            cursor.execute(search_sql, [query_list, top_k])
             
             results = []
             for row in cursor:
@@ -376,26 +365,33 @@ class OracleVectorStore:
     def list_documents(self) -> List[Dict[str, Any]]:
         """
         List all documents in the vector store
-        
+
         Returns:
             List of documents with metadata
         """
         try:
             cursor = self.connection.cursor()
-            
+
             list_sql = f"""
-                SELECT 
-                    document_id,
-                    COUNT(*) as chunk_count,
-                    MIN(created_at) as created_at,
-                    MAX(metadata) as metadata
-                FROM {self.vector_table}
-                GROUP BY document_id
-                ORDER BY MIN(created_at) DESC
+                SELECT dv.document_id, dv.chunk_count, dv.created_at, m.metadata
+                FROM (
+                    SELECT document_id, COUNT(*) as chunk_count, MIN(created_at) as created_at
+                    FROM {self.vector_table}
+                    GROUP BY document_id
+                ) dv
+                LEFT JOIN (
+                    SELECT document_id, metadata
+                    FROM (
+                        SELECT document_id, metadata,
+                               ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY created_at ASC) as rn
+                        FROM {self.vector_table}
+                    ) WHERE rn = 1
+                ) m ON dv.document_id = m.document_id
+                ORDER BY dv.created_at DESC
             """
-            
+
             cursor.execute(list_sql)
-            
+
             documents = []
             for row in cursor:
                 metadata = json.loads(row[3]) if row[3] else {}
@@ -405,10 +401,10 @@ class OracleVectorStore:
                     'created_at': row[2].isoformat() if row[2] else None,
                     'metadata': metadata
                 })
-            
+
             cursor.close()
             return documents
-            
+
         except Exception as e:
             logger.error(f"Error listing documents: {e}")
             return []
@@ -489,4 +485,3 @@ class OracleVectorStore:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.close()
-

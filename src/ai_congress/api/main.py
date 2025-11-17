@@ -2,7 +2,7 @@
 FastAPI Main Application
 Enhanced with comprehensive logging and verbosity
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -224,6 +224,7 @@ async def chat(request: ChatRequest):
         # Initialize prompt (may be augmented with RAG/web search)
         augmented_prompt = request.prompt
         context_sources = []
+        web_search_results = []
         
         # Add web search context if requested
         if request.search_web:
@@ -240,6 +241,7 @@ async def chat(request: ChatRequest):
             search_results = await web_search_engine.search(request.prompt)
             
             if search_results:
+                web_search_results = search_results  # Store for response
                 web_context = web_search_engine.format_results_for_context(search_results)
                 augmented_prompt = web_context + "\n\nUser Question: " + request.prompt
                 context_sources.append({"type": "web_search", "count": len(search_results)})
@@ -319,6 +321,10 @@ async def chat(request: ChatRequest):
         # Add context sources to result
         if context_sources:
             result['context_sources'] = context_sources
+        
+        # Add web search results to response if available
+        if web_search_results:
+            result['web_search_results'] = web_search_results
         
         return result
 
@@ -602,28 +608,35 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 # Document Upload and RAG
 @app.post("/api/documents/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload and process document for RAG"""
     global rag_engine
-    
+
     try:
         if rag_engine is None:
             rag_engine = get_rag_engine()
-        
+
         # Save uploaded file
         upload_dir = "uploads"
         os.makedirs(upload_dir, exist_ok=True)
-        
+
         file_path = os.path.join(upload_dir, file.filename)
         with open(file_path, 'wb') as f:
             content = await file.read()
             f.write(content)
-        
-        # Process document
-        result = await rag_engine.process_document(file_path)
-        
-        return result
-        
+
+        # Generate document ID
+        document_id = Path(file_path).stem
+
+        # Process document in background
+        background_tasks.add_task(rag_engine.process_document, file_path)
+
+        return {
+            "success": True,
+            "document_id": document_id,
+            "message": "Upload successful, processing in background"
+        }
+
     except Exception as e:
         logger.error(f"Document upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

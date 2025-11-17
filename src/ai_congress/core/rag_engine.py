@@ -108,30 +108,41 @@ class RAGEngine:
             logger.info(f"Processing document: {file_path} (ID: {document_id})")
             
             # Parse and chunk document
+            print(f"[RAG] Parsing and chunking document: {file_path}")
             full_text, chunks = await asyncio.to_thread(
                 self.document_processor.process_document,
                 file_path,
                 document_id
             )
-            
+
+            print(f"[RAG] Parsed text length: {len(full_text)} chars, chunks: {len(chunks)}")
             if not chunks:
+                print("[RAG] ERROR: No chunks created from document")
                 return {
                     'success': False,
                     'error': 'No chunks created from document'
                 }
-            
+
+            logger.info(f"Created {len(chunks)} chunks from {file_path}")
+            print(f"[RAG] Created {len(chunks)} chunks from {file_path}")
+
             # Generate embeddings for chunks
             chunk_texts = [chunk.text for chunk in chunks]
+            print(f"[RAG] Generating embeddings for {len(chunk_texts)} chunks (batch_size=32)")
             embeddings = await asyncio.to_thread(
                 self.embedding_generator.generate_embeddings,
                 chunk_texts,
                 batch_size=32
             )
-            
+
+            logger.info(f"Generated {len(embeddings)} embeddings")
+            print(f"[RAG] Generated {len(embeddings)} embeddings")
+
             # Prepare metadata
             chunk_metadata = [chunk.metadata for chunk in chunks]
-            
+
             # Store in vector database
+            print(f"[RAG] Storing {len(chunk_texts)} vectors in database")
             success = await asyncio.to_thread(
                 self.vector_store.insert_vectors,
                 document_id,
@@ -139,6 +150,8 @@ class RAGEngine:
                 embeddings,
                 chunk_metadata
             )
+
+            print(f"[RAG] Vector storage success: {success}")
             
             if success:
                 logger.info(f"Successfully processed document {document_id}: {len(chunks)} chunks")
@@ -336,4 +349,3 @@ def get_rag_engine() -> RAGEngine:
         _rag_engine = RAGEngine()
     
     return _rag_engine
-

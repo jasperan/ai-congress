@@ -25,6 +25,7 @@
   let showDocuments = false
   let showImageGen = false
   let documentsRefresh = 0
+  let selectedDocuments = []
   
   // Image generation
   let imageGenPrompt = ''
@@ -190,23 +191,36 @@
         }
       } else {
         // Use HTTP for non-streaming
+        const requestData = {
+          prompt: currentPrompt,
+          models: selectedModels,
+          mode,
+          use_rag: useRAG,
+          search_web: searchWeb
+        }
+
+        if (useRAG && selectedDocuments.length > 0) {
+          requestData.document_ids = selectedDocuments
+        }
+
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: currentPrompt,
-            models: selectedModels,
-            mode,
-            use_rag: useRAG,
-            search_web: searchWeb
-          })
+          body: JSON.stringify(requestData)
         })
 
         const result = await response.json()
         currentResult = result
 
+        // Build final content with web search results if available
+        let finalContent = result.final_answer
+
+        if (result.web_search_results && result.web_search_results.length > 0) {
+          finalContent = `**Web Search Results:**\n\n${result.web_search_results.map(item => `- **${item.title}**: ${item.description}\n  [${item.url}]`).join('\n\n')}\n\n---\n\n${result.final_answer}`
+        }
+
         // Update the streaming message with final content
-        streamingMessage.content = result.final_answer
+        streamingMessage.content = finalContent
         streamingMessage.result = result
         streamingMessage.isStreaming = false
         messages = [...messages]
@@ -600,9 +614,11 @@
 
       <!-- Documents List -->
       <div>
-        <DocumentList 
+        <DocumentList
           onDocumentDeleted={handleDocumentDeleted}
           refreshTrigger={documentsRefresh}
+          {selectedDocuments}
+          onSelectionChanged={() => {}}
         />
       </div>
     </div>
