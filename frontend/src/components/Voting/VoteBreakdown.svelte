@@ -1,0 +1,87 @@
+<script>
+  export let voteBreakdown = {}
+  export let confidence = 0
+  
+  $: votes = Object.entries(voteBreakdown)
+  $: confidenceColor = confidence > 0.8 ? 'bg-green-500' : confidence > 0.6 ? 'bg-yellow-500' : 'bg-orange-500'
+  $: confidenceText = confidence > 0.8 ? 'High' : confidence > 0.6 ? 'Medium' : 'Low'
+</script>
+
+<div class="card p-4 space-y-4 animate-fade-in">
+  <div class="flex items-center justify-between">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+      🗳️ Vote Breakdown
+    </h3>
+    <div class="flex items-center space-x-2">
+      <span class="text-sm text-gray-600 dark:text-gray-400">Confidence:</span>
+      <span class="badge {confidenceColor} text-white px-3 py-1">
+        {confidenceText} ({(confidence * 100).toFixed(1)}%)
+      </span>
+    </div>
+  </div>
+
+  <!-- Confidence Bar -->
+  <div class="space-y-2">
+    <div class="confidence-bar">
+      <div 
+        class="confidence-fill {confidenceColor}"
+        style="width: {confidence * 100}%"
+      ></div>
+    </div>
+  </div>
+
+  <!-- Vote Details -->
+  {#if votes.length > 0}
+    <div class="space-y-3">
+      {#each votes as [model, data], i}
+        <div class="flex items-center space-x-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 
+                    border border-gray-200 dark:border-gray-600 animate-slide-up"
+             style="animation-delay: {i * 0.1}s">
+          <div class="flex-shrink-0">
+            <div class="w-10 h-10 rounded-full bg-congress-model flex items-center justify-center text-white font-bold">
+              {model.charAt(0).toUpperCase()}
+            </div>
+          </div>
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-1">
+              <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                {model}
+              </p>
+              <span class="text-sm font-semibold text-congress-vote">
+                {(data.weight * 100).toFixed(1)}%
+              </span>
+            </div>
+            
+            <!-- Vote weight bar -->
+            <div class="h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+              <div 
+                class="h-full bg-gradient-to-r from-congress-vote to-green-400 transition-all duration-500"
+                style="width: {(data.weight * 100)}%"
+              ></div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+      <p>No vote data available yet</p>
+      <p class="text-sm mt-1">Submit a query to see voting breakdown</p>
+    </div>
+  {/if}
+
+  <!-- Algorithm Info -->
+  <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+    <div class="flex items-start space-x-2 text-xs text-gray-600 dark:text-gray-400">
+      <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+      </svg>
+      <span>
+        Votes are weighted by model accuracy scores from MMLU benchmarks. 
+        Higher-performing models have more influence on the final decision.
+      </span>
+    </div>
+  </div>
+</div>
+
