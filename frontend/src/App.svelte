@@ -1,12 +1,14 @@
 <script>
   import { onMount } from 'svelte'
   import ChatInterface from './components/Chat/ChatInterface.svelte'
+  import PersonalityChat from './components/Personality/PersonalityChat.svelte'
 
   let models = []
   let selectedModels = []
   let isLoading = true
   let error = null
   let darkMode = false
+  let activeTab = 'models' // 'models' or 'personalities'
 
   // Load models on mount
   onMount(async () => {
@@ -207,9 +209,37 @@
         </div>
       </div>
     {:else}
-      <!-- Chat Interface -->
+      <!-- Tab Navigation -->
+      <div class="mb-6">
+        <div class="border-b border-gray-200 dark:border-gray-700">
+          <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              on:click={() => activeTab = 'models'}
+              class="border-b-2 py-2 px-1 text-sm font-medium {activeTab === 'models'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'}"
+            >
+              🤖 Model Swarm
+            </button>
+            <button
+              on:click={() => activeTab = 'personalities'}
+              class="border-b-2 py-2 px-1 text-sm font-medium {activeTab === 'personalities'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'}"
+            >
+              🎭 Personality Swarm
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Tab Content -->
       <div class="h-full">
-        <ChatInterface {models} bind:selectedModels />
+        {#if activeTab === 'models'}
+          <ChatInterface {models} bind:selectedModels />
+        {:else if activeTab === 'personalities'}
+          <PersonalityChat {models} />
+        {/if}
       </div>
     {/if}
   </main>
