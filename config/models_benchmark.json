@@ -38,5 +38,110 @@
     "accuracy": 0.76,
     "mmlu": 0.76,
     "description": "General purpose"
+  },
+  "gpt-oss:20b": {
+    "accuracy": 0.87,
+    "mmlu": 0.87,
+    "description": "OpenAI open-weight model for reasoning and agentic tasks"
+  },
+  "gpt-oss:120b": {
+    "accuracy": 0.92,
+    "mmlu": 0.92,
+    "description": "Large OpenAI open-weight model for advanced reasoning"
+  },
+  "deepseek-r1:1.5b": {
+    "accuracy": 0.82,
+    "mmlu": 0.82,
+    "description": "Lightweight reasoning model with strong performance"
+  },
+  "deepseek-r1:7b": {
+    "accuracy": 0.88,
+    "mmlu": 0.88,
+    "description": "Balanced reasoning model approaching top-tier performance"
+  },
+  "deepseek-r1:8b": {
+    "accuracy": 0.89,
+    "mmlu": 0.89,
+    "description": "High-performance reasoning model"
+  },
+  "deepseek-r1:14b": {
+    "accuracy": 0.91,
+    "mmlu": 0.91,
+    "description": "Large reasoning model with excellent performance"
+  },
+  "deepseek-r1:32b": {
+    "accuracy": 0.92,
+    "mmlu": 0.92,
+    "description": "Very large reasoning model with top-tier capabilities"
+  },
+  "deepseek-r1:70b": {
+    "accuracy": 0.93,
+    "mmlu": 0.93,
+    "description": "Massive reasoning model approaching leading model performance"
+  },
+  "deepseek-r1:671b": {
+    "accuracy": 0.94,
+    "mmlu": 0.94,
+    "description": "Ultra-large reasoning model with state-of-the-art performance"
+  },
+  "qwen3:0.6b": {
+    "accuracy": 0.75,
+    "mmlu": 0.75,
+    "description": "Lightweight Qwen3 model for efficient inference"
+  },
+  "qwen3:1.7b": {
+    "accuracy": 0.78,
+    "mmlu": 0.78,
+    "description": "Small Qwen3 model with good performance"
+  },
+  "qwen3:4b": {
+    "accuracy": 0.82,
+    "mmlu": 0.82,
+    "description": "Medium Qwen3 model balancing size and performance"
+  },
+  "qwen3:8b": {
+    "accuracy": 0.85,
+    "mmlu": 0.85,
+    "description": "Large Qwen3 model with strong capabilities"
+  },
+  "qwen3:14b": {
+    "accuracy": 0.87,
+    "mmlu": 0.87,
+    "description": "Very large Qwen3 model for advanced tasks"
+  },
+  "qwen3:30b": {
+    "accuracy": 0.89,
+    "mmlu": 0.89,
+    "description": "Massive Qwen3 model with excellent reasoning"
+  },
+  "qwen3:32b": {
+    "accuracy": 0.89,
+    "mmlu": 0.89,
+    "description": "Optimized Qwen3 model for dense computation"
+  },
+  "qwen3:235b": {
+    "accuracy": 0.91,
+    "mmlu": 0.91,
+    "description": "Ultra-large Qwen3 MoE model with top performance"
+  },
+  "deepseek-v3.1:671b": {
+    "accuracy": 0.93,
+    "mmlu": 0.93,
+    "description": "Hybrid thinking/non-thinking model with versatile capabilities"
+  },
+  "magistral:24b": {
+    "accuracy": 0.83,
+    "mmlu": 0.83,
+    "description": "Efficient 24B reasoning model for balanced performance"
+  },
+  "gpt-oss-safeguard:20b": {
+    "accuracy": 0.86,
+    "mmlu": 0.86,
+    "description": "Safety-focused OpenAI open-weight model"
+  },
+  "gpt-oss-safeguard:120b": {
+    "accuracy": 0.91,
+    "mmlu": 0.91,
+    "description": "Large safety reasoning model with enhanced safeguards"
   }
 }

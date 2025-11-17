@@ -3,7 +3,7 @@
   export let index = 0
   
   $: isSuccess = response.success
-  $: modelName = response.model || 'Unknown'
+  $: modelName = response.personality_name || response.model || 'Unknown'
   $: content = response.response || response.error || 'No response'
   $: temperature = response.temperature || null
 </script>
@@ -66,4 +66,3 @@
     </div>
   {/if}
 </div>
-

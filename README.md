@@ -84,6 +84,7 @@ The modern web interface provides:
 - **Base Model Configuration**: Configure which model to use as the base for all personalities (default: deepseek-r1)
 - **Predefined Personalities**: Comes with 6 built-in personalities including Trump, Biden, Einstein, and more
 - **Personality Voting**: All personalities vote using their unique perspectives
+- **Pure Roleplay**: Enhanced prompt engineering ensures responses are purely in-character, with no internal reasoning or meta-commentary leaking through
 
 #### 🧠 Semantic Confidence Threshold
 - **Dual Confidence Metrics**: Shows both string-based confidence (exact matching) and semantic confidence (meaning agreement)

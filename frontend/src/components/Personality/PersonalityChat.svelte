@@ -8,11 +8,15 @@
   let personalityLists = []
   let selectedPersonalities = []
   let prompt = ''
+  let mode = 'personality'
+  let streamResponses = false
   let messages = []
   let isLoading = false
   let showResponses = false
   let currentResult = null
   let showCreateForm = false
+  let websocket = null
+  let streamingMessage = null
   let newPersonality = {
     name: '',
     description: '',
@@ -62,34 +66,140 @@
     const currentPrompt = prompt
     prompt = ''
 
+    // Build history: all previous messages except the current user message
+    const history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: currentPrompt,
-          personalities: selectedPersonalities,
-          models: [],
-          mode: 'personality'
+      if (streamResponses) {
+        // Use WebSocket for streaming
+        websocket = new WebSocket(`ws://localhost:8000/ws/chat`)
+
+        websocket.onopen = () => {
+          websocket.send(JSON.stringify({
+            prompt: currentPrompt,
+            personalities: selectedPersonalities,
+            models: [],
+            mode: 'personality',
+            stream: true,
+            history: history
+          }))
+        }
+
+        websocket.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+
+          if (data.type === 'start') {
+            // Update loading message
+            streamingMessage.content = data.message
+            messages = [...messages]
+          } else if (data.type === 'model_response') {
+            // Add individual personality response as separate message
+            messages = [...messages, {
+              role: 'assistant',
+              content: data.content,
+              entity_name: data.model,
+              timestamp: Date.now(),
+              isIndividual: true
+            }]
+          } else if (data.type === 'final_answer') {
+            // Final result
+            streamingMessage.content = data.content
+            streamingMessage.result = {
+              confidence: data.confidence,
+              semantic_confidence: data.semantic_confidence,
+              vote_breakdown: data.vote_breakdown,
+              responses: [] // Will be populated if available
+            }
+            currentResult = streamingMessage.result
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            websocket.close()
+            websocket = null
+          } else if (data.type === 'error') {
+            streamingMessage.content = `Error: ${data.message}`
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            websocket.close()
+            websocket = null
+          }
+        }
+
+        websocket.onerror = async (error) => {
+          console.error('WebSocket error:', error)
+          // Fallback to non-streaming
+          try {
+            const response = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: currentPrompt,
+                personalities: selectedPersonalities,
+                models: [],
+                mode: 'personality',
+                history: history
+              })
+            })
+            const result = await response.json()
+            currentResult = result
+            streamingMessage.content = result.final_answer
+            streamingMessage.result = result
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            isLoading = false
+          } catch (fetchError) {
+            console.error('Fallback fetch error:', fetchError)
+            streamingMessage.content = 'Connection error occurred'
+            streamingMessage.isStreaming = false
+            messages = [...messages]
+            isLoading = false
+          }
+          if (websocket) {
+            websocket.close()
+            websocket = null
+          }
+        }
+
+        websocket.onclose = () => {
+          isLoading = false
+          websocket = null
+        }
+      } else {
+        // Use HTTP for non-streaming
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: currentPrompt,
+            personalities: selectedPersonalities,
+            models: [],
+            mode: 'personality',
+            history: history
+          })
         })
-      })
 
-      const result = await response.json()
-      currentResult = result
+        const result = await response.json()
+        currentResult = result
 
-      messages = [...messages, {
-        role: 'assistant',
-        content: result.final_answer,
-        result: result,
-        timestamp: Date.now()
-      }]
+        // Add assistant message to messages
+        messages = [...messages, {
+          role: 'assistant',
+          content: result.final_answer,
+          timestamp: Date.now(),
+          result: result
+        }]
+        isLoading = false
+      }
     } catch (e) {
       console.error('Error:', e)
-      messages = [...messages, {
-        role: 'assistant',
-        content: 'Error: ' + e.message,
-        timestamp: Date.now()
-      }]
+      streamingMessage.content = 'Error: ' + e.message
+      streamingMessage.isStreaming = false
+      messages = [...messages]
+      isLoading = false
+
+      if (websocket) {
+        websocket.close()
+        websocket = null
+      }
     }
 
     isLoading = false
@@ -149,9 +259,16 @@
           !selectedPersonalities.find(sp => sp.name === p.name)
         )
         selectedPersonalities = [...selectedPersonalities, ...newPersonalities]
-        // Also add to personalities array for individual selection buttons
-        personalities = [...personalities, ...newPersonalities]
-        console.log(`[UI][${new Date().toISOString()}][GROUP_LOADED] Added ${newPersonalities.length} personalities from ${listName} (total: ${selectedPersonalities.length})`)
+        // Merge uniquely into personalities array for individual selection buttons
+        const existingNames = new Set(personalities.map(p => p.name))
+        const uniqueNew = newPersonalities.filter(p => !existingNames.has(p.name))
+        personalities = [...personalities, ...uniqueNew]
+        console.log(`[UI][${new Date().toISOString()}][GROUP_LOADED] Added ${newPersonalities.length} personalities from ${listName} (total selected: ${selectedPersonalities.length}, unique added: ${uniqueNew.length})`)
+
+        // Warn on large selections
+        if (selectedPersonalities.length > 50) {
+          alert('Large personality selection detected! This may take longer to process. Consider deselecting some personalities for faster responses.')
+        }
       } else {
         console.error(`[UI][${new Date().toISOString()}][GROUP_ERROR] Failed to load ${listName} list: ${response.status} ${response.statusText}`)
       }
@@ -188,6 +305,22 @@
       </div>
     </div>
 
+    <!-- Mode Selector -->
+    <div class="flex items-center space-x-6">
+      <div class="flex items-center space-x-2">
+        <input
+          id="stream-toggle"
+          type="checkbox"
+          bind:checked={streamResponses}
+          class="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500
+                 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+        />
+        <label for="stream-toggle" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Stream Responses
+        </label>
+      </div>
+    </div>
+
     <!-- Personality Selector -->
     <div>
       <div class="flex items-center justify-between mb-3">
@@ -198,6 +331,13 @@
           <span class="text-xs text-gray-500 dark:text-gray-400">
             {personalities.length} available
           </span>
+          <button
+            on:click={() => selectedPersonalities = []}
+            class="btn-secondary text-xs px-3 py-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20"
+            disabled={selectedPersonalities.length === 0}
+          >
+            Unload All
+          </button>
           <button
             on:click={toggleCreateForm}
             class="btn-secondary text-xs px-3 py-1"
@@ -333,12 +473,24 @@
                   </div>
 
                   <div class="flex-1">
-                    <div class="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 border
-                                border-gray-200 dark:border-gray-700 shadow-sm">
-                      <p class="text-sm leading-relaxed whitespace-pre-wrap text-gray-900 dark:text-gray-100">
-                        {message.content}
-                      </p>
-                    </div>
+                    {#if message.isIndividual}
+                      <div class="px-4 py-3 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border
+                                  border-blue-200 dark:border-blue-700 shadow-sm">
+                        <div class="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
+                          {message.entity_name}
+                        </div>
+                        <p class="text-sm leading-relaxed whitespace-pre-wrap text-gray-900 dark:text-gray-100">
+                          {message.content}
+                        </p>
+                      </div>
+                    {:else}
+                      <div class="px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 border
+                                  border-gray-200 dark:border-gray-700 shadow-sm">
+                        <p class="text-sm leading-relaxed whitespace-pre-wrap text-gray-900 dark:text-gray-100">
+                          {message.content}
+                        </p>
+                      </div>
+                    {/if}
 
                     <div class="flex items-center space-x-4 mt-2 px-2">
                       <span class="text-xs text-gray-500 dark:text-gray-400">
