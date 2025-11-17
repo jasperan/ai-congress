@@ -67,12 +67,34 @@ If you're using a remote Ollama server (e.g., with GPU), set up models on the se
 
 ### Web UI Features
 The modern web interface provides:
+- **Two Chat Modes**: Choose between "Model Swarm" and "Personality Swarm"
 - **Model Selection**: Choose which LLMs participate in the swarm
+- **Personality Creation**: Create custom AI personalities with unique system prompts
 - **Swarm Modes**: Multi-Model, Multi-Request, or Hybrid
 - **Vote Visualization**: See how each model contributes to the final answer
 - **Response Details**: Expandable view showing individual model responses
-- **Confidence Scoring**: Visual indication of consensus strength
+- **Dual Confidence Scoring**: Both string-based and semantic agreement confidence
+- **Semantic Warnings**: Alerts when responses agree in voting but differ semantically
 - **Dark Mode**: Easy on the eyes for late-night AI conversations
+
+### New Features
+
+#### 🎭 Personality Swarm Mode
+- **Create Custom Personalities**: Define AI agents with specific personalities (e.g., "Donald Trump", "Albert Einstein")
+- **Base Model Configuration**: Configure which model to use as the base for all personalities (default: deepseek-r1)
+- **Predefined Personalities**: Comes with 6 built-in personalities including Trump, Biden, Einstein, and more
+- **Personality Voting**: All personalities vote using their unique perspectives
+
+#### 🧠 Semantic Confidence Threshold
+- **Dual Confidence Metrics**: Shows both string-based confidence (exact matching) and semantic confidence (meaning agreement)
+- **LLM-Powered Evaluation**: Uses a separate summarizer model (phi3) to assess semantic agreement
+- **Low Agreement Warnings**: Yellow warning banner when semantic confidence is below 60%
+- **Better Accuracy**: Catches cases where models agree on words but not meaning (e.g., "2+2=4" responses)
+
+#### 🏛️ Enhanced Voting System
+- **Weighted Majority Vote**: Models vote based on their MMLU benchmark performance scores
+- **Semantic Validation**: Ensures voted-upon answers actually mean the same thing
+- **Response Aggregation**: Intelligent combination of diverse model outputs
 
 ## 🧪 Testing
 Run tests: `python -m pytest tests/ -v`
