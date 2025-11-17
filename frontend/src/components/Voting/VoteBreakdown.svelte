@@ -1,10 +1,18 @@
 <script>
   export let voteBreakdown = {}
   export let confidence = 0
-  
+  export let semanticConfidence = null
+
   $: votes = Object.entries(voteBreakdown)
   $: confidenceColor = confidence > 0.8 ? 'bg-green-500' : confidence > 0.6 ? 'bg-yellow-500' : 'bg-orange-500'
   $: confidenceText = confidence > 0.8 ? 'High' : confidence > 0.6 ? 'Medium' : 'Low'
+  $: semanticConfidenceColor = semanticConfidence !== null
+      ? (semanticConfidence > 0.8 ? 'bg-green-500' : semanticConfidence > 0.6 ? 'bg-yellow-500' : 'bg-red-500')
+      : null
+  $: semanticConfidenceText = semanticConfidence !== null
+      ? (semanticConfidence > 0.8 ? 'High' : semanticConfidence > 0.6 ? 'Medium' : 'Low')
+      : null
+  $: showSemanticWarning = semanticConfidence !== null && semanticConfidence < 0.6
 </script>
 
 <div class="card p-4 space-y-4 animate-fade-in">
@@ -23,12 +31,48 @@
   <!-- Confidence Bar -->
   <div class="space-y-2">
     <div class="confidence-bar">
-      <div 
+      <div
         class="confidence-fill {confidenceColor}"
         style="width: {confidence * 100}%"
       ></div>
     </div>
   </div>
+
+  <!-- Semantic Confidence (if available) -->
+  {#if semanticConfidence !== null}
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-600 dark:text-gray-400">Semantic Confidence:</span>
+        <span class="badge {semanticConfidenceColor} text-white px-3 py-1">
+          {semanticConfidenceText} ({(semanticConfidence * 100).toFixed(1)}%)
+        </span>
+      </div>
+      <div class="confidence-bar">
+        <div
+          class="confidence-fill {semanticConfidenceColor}"
+          style="width: {semanticConfidence * 100}%"
+        ></div>
+      </div>
+
+      <!-- Semantic Confidence Warning -->
+      {#if showSemanticWarning}
+        <div class="flex items-start space-x-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20
+                    border border-yellow-200 dark:border-yellow-700">
+          <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+          <div class="text-sm">
+            <p class="font-medium text-yellow-800 dark:text-yellow-200">
+              Low Semantic Agreement
+            </p>
+            <p class="text-yellow-700 dark:text-yellow-300">
+              Responses show low semantic similarity despite voting consensus. Consider reviewing individual responses for nuanced differences.
+            </p>
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Vote Details -->
   {#if votes.length > 0}
@@ -84,4 +128,3 @@
     </div>
   </div>
 </div>
-
