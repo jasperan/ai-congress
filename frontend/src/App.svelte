@@ -54,7 +54,7 @@
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
   <!-- Navigation Bar -->
-  <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+  <nav class="sticky top-0 z-50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <!-- Logo and Title -->
@@ -64,7 +64,7 @@
             🏛️
           </div>
           <div>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-400 dark:to-purple-400">
               AI Congress
             </h1>
             <p class="text-xs text-gray-600 dark:text-gray-400">

@@ -64,6 +64,10 @@ class OllamaClient:
                 stream=stream
             )
 
+            if stream:
+                debug_action("OLLAMA_RESPONSE", model, "Streaming response...", config.logging.verbosity)
+                return response
+
             # Log successful response
             content = response.get('message', {}).get('content', '')
             debug_action("OLLAMA_RESPONSE", model, f"Generated: {truncate_text(content, 80)}", config.logging.verbosity)

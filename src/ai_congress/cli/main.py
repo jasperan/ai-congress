@@ -39,7 +39,8 @@ def chat(
     mode: str = typer.Option("multi_model", "--mode", help="Swarm mode: multi_model, multi_request, hybrid, personality"),
     temperature: float = typer.Option(0.7, "--temp", "-t", help="Temperature for models"),
     stream: bool = typer.Option(False, "--stream", "-s", help="Stream responses in real-time"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    reasoning: Optional[str] = typer.Option(None, "--reasoning", "-r", help="Reasoning mode: cot, react")
 ):
     """Interactive chat with LLM swarm"""
     async def run_chat():
@@ -50,7 +51,7 @@ def chat(
             if stream:
                 # Streaming mode: Show individual responses as they complete
                 console.print("[bold blue]Streaming individual responses...[/bold blue]")
-                await stream_chat(prompt, models, mode, temperature, verbose, personalities)
+                await stream_chat(prompt, models, mode, temperature, verbose, personalities, reasoning)
             else:
                 # Non-streaming: Show progress and final result
                 with Progress(
@@ -65,7 +66,8 @@ def chat(
                         result = await swarm.multi_model_swarm(
                             models=models,
                             prompt=prompt,
-                            temperature=temperature
+                            temperature=temperature,
+                            reasoning_mode=reasoning
                         )
                     elif mode == "multi_request":
                         result = await swarm.multi_request_swarm(
@@ -139,7 +141,7 @@ def chat(
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
-    async def stream_chat(prompt, models, mode, temperature, verbose, personalities=None):
+    async def stream_chat(prompt, models, mode, temperature, verbose, personalities=None, reasoning=None):
         """Stream individual responses in real-time"""
         import asyncio
         from rich.live import Live
@@ -216,7 +218,7 @@ def chat(
 
         if mode == "multi_model":
             for model in models:
-                task = swarm.query_model(model, prompt, temperature)
+                task = swarm.query_model(model, prompt, temperature, reasoning_mode=reasoning)
                 tasks[task] = model
                 task_to_entity[task] = model
         elif mode == "multi_request":

@@ -114,7 +114,7 @@
           <div class="document-header">
             <input
               type="checkbox"
-              bind:checked={selectedDocuments.includes(doc.document_id)}
+              checked={selectedDocuments.includes(doc.document_id)}
               on:change={() => {
                 if (selectedDocuments.includes(doc.document_id)) {
                   selectedDocuments = selectedDocuments.filter(id => id !== doc.document_id)

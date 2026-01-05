@@ -278,9 +278,9 @@
         {#each models as model}
           <button
             on:click={() => toggleModel(model.name)}
-            class="group relative px-4 py-2 rounded-lg border-2 transition-all duration-200
+            class="group relative px-4 py-2 rounded-lg border-2 transition-all duration-200 hover:scale-105 hover:shadow-md
                    {selectedModels.includes(model.name)
-                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 shadow-sm'
                      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-primary-300'
                    }"
           >

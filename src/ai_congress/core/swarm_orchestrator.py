@@ -96,10 +96,54 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         messages: Optional[List[Dict[str, str]]] = None,
         stream: bool = False,
         update_callback: Optional[callable] = None,
-        entity_name: Optional[str] = None
+        entity_name: Optional[str] = None,
+        reasoning_mode: Optional[str] = None
     ) -> Dict:
         """Query a single model asynchronously"""
         try:
+            if reasoning_mode:
+                from .reasoning import CoTAgent, ReActAgent
+                agent = None
+                if reasoning_mode.lower() == "cot":
+                    agent = CoTAgent(self.ollama_client, model_name)
+                elif reasoning_mode.lower() == "react":
+                    agent = ReActAgent(self.ollama_client, model_name)
+                
+                if agent:
+                    logger.info(f"Using reasoning mode {reasoning_mode} for {model_name}")
+                    if stream:
+                        response_text = ""
+                        if update_callback:
+                            update_callback('start', entity_name or model_name)
+                        async for chunk in agent.stream(prompt):
+                            response_text += chunk
+                            if update_callback:
+                                update_callback('chunk', entity_name or model_name, chunk, response_text)
+                        if update_callback:
+                            update_callback('complete', entity_name or model_name, response_text)
+                        
+                        return {
+                            'model': model_name,
+                            'response': response_text,
+                            'temperature': temperature,
+                            'success': True,
+                            'reasoning_mode': reasoning_mode
+                        }
+                    else:
+                        if update_callback:
+                            update_callback('start', entity_name or model_name)
+                        response_text = await agent.run(prompt)
+                        if update_callback:
+                            update_callback('complete', entity_name or model_name, response_text)
+                            
+                        return {
+                            'model': model_name,
+                            'response': response_text,
+                            'temperature': temperature,
+                            'success': True,
+                            'reasoning_mode': reasoning_mode
+                        }
+
             if messages is None:
                 messages = []
                 if system_prompt:
@@ -163,7 +207,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         models: List[str],
         prompt: str,
         system_prompt: Optional[str] = None,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        reasoning_mode: Optional[str] = None
     ) -> Dict:
         """
         Query multiple different models concurrently
@@ -180,7 +225,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
 
         # Create concurrent tasks
         tasks = [
-            self.query_model(model, prompt, temperature, system_prompt)
+            self.query_model(model, prompt, temperature, system_prompt, reasoning_mode=reasoning_mode)
             for model in models
         ]
 
