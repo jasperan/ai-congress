@@ -31,8 +31,23 @@ Now featuring **Advanced Reasoning Layers** (Chain-of-Thought, ReAct) to solve c
 The quickest way to interact with the swarm. Use the newly added `run_cli.py` script:
 
 ```bash
-# Basic Chat
-./run_cli.py chat "Should we regulate AI?"
+# Launch Interactive Menu
+./run_cli.py
+```
+
+**Interactive Experience:**
+```text
+╭───────────────────────────────────────────╮
+│ AI CONGRESS CLI                           │
+│ Multi-Agent LLM Swarm Decision System     │
+╰───────────────────────────────────────────╯
+
+? Select Activity:
+  Start Swarm Chat
+  List Available Models
+  Pull New Model
+  Exit
+```
 
 # Enable Reasoning (Chain-of-Thought)
 ./run_cli.py chat "Solve this logic puzzle..." --reasoning cot

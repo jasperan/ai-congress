@@ -177,13 +177,10 @@ def pull(model_name: str = typer.Argument(..., help="Name of model to pull")):
 
 def print_header():
     os.system('cls' if os.name == 'nt' else 'clear')
-    title = """
-    ╔════════════════════════════════════════════════════════════════╗
-    ║                 AI CONGRESS CLI                                ║
-    ║         Multi-Agent LLM Swarm Decision System                  ║
-    ╚════════════════════════════════════════════════════════════════╝
-    """
-    console.print(Panel(title, style="bold purple", border_style="purple", subtitle="Swarm Intelligence Layer"))
+    console.print(Panel.fit(
+        "[bold cyan]AI CONGRESS CLI[/bold cyan]\n[dim]Multi-Agent LLM Swarm Decision System[/dim]",
+        border_style="cyan"
+    ))
 
 
 def interactive_menu():
