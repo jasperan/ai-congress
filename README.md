@@ -2,10 +2,10 @@
 
 # AI Congress
 
-![Status](https://img.shields.io/badge/Status-Active-success)
-![Reasoning](https://img.shields.io/badge/Reasoning-CoT%20%7C%20ReAct-blue)
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
+![Reasoning](https://img.shields.io/badge/Reasoning-CoT%20%7C%20ReAct-blue?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 AI Congress is an innovative system where autonomous LLM agents (powered by **Ollama**) collaborate and vote on responses using weighted ensemble decision-making algorithms.
 
@@ -100,3 +100,13 @@ ollama:
 
 ## 🧪 Testing
 Run tests: `python -m pytest tests/ -v`
+
+---
+
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-jasperan-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/jasperan)&nbsp;
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-jasperan-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/jasperan/)&nbsp;
+[![Oracle](https://img.shields.io/badge/Oracle_Database-Free-F80000?style=for-the-badge&logo=oracle&logoColor=white)](https://www.oracle.com/database/free/)
+
+</div>
