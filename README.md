@@ -6,6 +6,7 @@
 ![Reasoning](https://img.shields.io/badge/Reasoning-CoT%20%7C%20ReAct-blue?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![Ollama](https://img.shields.io/badge/backend-Ollama-black?style=for-the-badge)
 
 AI Congress is an innovative system where autonomous LLM agents (powered by **Ollama**) collaborate and vote on responses using weighted ensemble decision-making algorithms.
 
