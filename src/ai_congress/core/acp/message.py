@@ -1,7 +1,28 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 import uuid
 import time
+
+
+class AgentStatus(str, Enum):
+    ACTIVE = "active"
+    IDLE = "idle"
+    STUCK = "stuck"
+    AWAY = "away"
+
+
+class ChannelType(str, Enum):
+    DIRECT = "direct"
+    BROADCAST = "broadcast"
+
+    @staticmethod
+    def room(name: str) -> str:
+        return f"room:{name}"
+
+    @staticmethod
+    def parse_room(channel: str) -> str | None:
+        return channel.split(":", 1)[1] if channel.startswith("room:") else None
 
 
 @dataclass

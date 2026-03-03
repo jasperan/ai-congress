@@ -13,12 +13,10 @@ class EmotionalVotingEngine:
         personalities: list[PersonalityProfile | None],
         model_names: list[str],
     ) -> tuple[str, float, dict]:
-        loader = ModelPersonalityLoader("/dev/null")
-
         effective_weights = []
         for base_w, personality in zip(base_weights, personalities):
             if personality:
-                modifier = loader.compute_emotional_weight_modifier(personality)
+                modifier = ModelPersonalityLoader.compute_emotional_weight_modifier(personality)
                 effective_weights.append(base_w * modifier)
             else:
                 effective_weights.append(base_w)

@@ -1,8 +1,10 @@
 from collections import defaultdict
-from .message import ACPMessage
+from .message import ACPMessage, ChannelType
 
 
 class ACPMessageBus:
+    MAX_HISTORY = 1000
+
     def __init__(self):
         self._queues: dict[str, list[ACPMessage]] = defaultdict(list)
         self._rooms: dict[str, set[str]] = defaultdict(set)
@@ -27,17 +29,18 @@ class ACPMessageBus:
 
     def send(self, message: ACPMessage) -> None:
         self._history.append(message)
+        if len(self._history) > self.MAX_HISTORY:
+            self._history = self._history[-self.MAX_HISTORY:]
         sender = message.sender.name
 
-        if message.channel == "direct" and message.recipient:
+        if message.channel == ChannelType.DIRECT and message.recipient:
             if message.recipient in self._agents:
                 self._queues[message.recipient].append(message)
-        elif message.channel == "broadcast":
+        elif message.channel == ChannelType.BROADCAST:
             for agent in self._agents:
                 if agent != sender:
                     self._queues[agent].append(message)
-        elif message.channel.startswith("room:"):
-            room_name = message.channel.split(":", 1)[1]
+        elif (room_name := ChannelType.parse_room(message.channel)):
             for agent in self._rooms.get(room_name, set()):
                 if agent != sender:
                     self._queues[agent].append(message)

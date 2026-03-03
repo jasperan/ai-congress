@@ -27,13 +27,15 @@ class ModelPersonalityLoader:
     def get_profile(self, model_name: str) -> PersonalityProfile:
         return self._profiles.get(model_name, PersonalityProfile())
 
-    def compute_emotional_weight_modifier(self, profile: PersonalityProfile) -> float:
+    @staticmethod
+    def compute_emotional_weight_modifier(profile: PersonalityProfile) -> float:
         """High confidence + low stress -> boost (up to 1.3x). Low confidence + high stress -> reduction (down to 0.7x)."""
         confidence_factor = 0.7 + (profile.confidence * 0.6)  # 0.7 to 1.3
         stress_penalty = 1.0 - (profile.stress / 20.0)  # 1.0 to 0.5
         return confidence_factor * stress_penalty
 
-    def debate_flexibility(self, profile: PersonalityProfile) -> float:
+    @staticmethod
+    def debate_flexibility(profile: PersonalityProfile) -> float:
         """0.0 (stubborn) to 1.0 (very flexible). High agreeableness + low neuroticism -> more flexible."""
         agreeableness_factor = profile.agreeableness / 10.0
         stability_factor = (10 - profile.neuroticism) / 10.0

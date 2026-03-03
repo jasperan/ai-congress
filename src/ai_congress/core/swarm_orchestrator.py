@@ -100,49 +100,29 @@ class SwarmOrchestrator:
 
         # Wave 2: Critique wave (moderate or chatty)
         if self.coordination.level in ("moderate", "chatty") and len(responses) > 1:
-            critique_prompt = (
-                f"Original question: {prompt}\n\n"
-                f"Other models responded:\n"
-                + "\n".join(
-                    f"- {name}: {resp}"
-                    for name, resp in zip(model_names_ok, responses)
-                )
-                + "\n\nReview these responses and provide your revised answer."
+            critique_prompt = self._build_debate_prompt(
+                prompt, model_names_ok, responses,
+                "Review these responses and provide your revised answer.",
             )
-            critique_tasks = [
+            critique_responses = await asyncio.gather(*[
                 self.query_model(m, critique_prompt, temperature=temperature)
                 for m in model_names_ok
-            ]
-            critique_responses = await asyncio.gather(*critique_tasks)
+            ])
             debate_waves += 1
-            responses = [
-                r.get("response", orig) if r.get("success") else orig
-                for r, orig in zip(critique_responses, responses)
-            ]
+            responses = self._merge_wave_responses(critique_responses, responses)
 
         # Wave 3: Final revision (chatty only)
         if self.coordination.level == "chatty" and len(responses) > 1:
-            revision_prompt = (
-                f"Original question: {prompt}\n\n"
-                f"After debate, the current positions are:\n"
-                + "\n".join(
-                    f"- {name}: {resp}"
-                    for name, resp in zip(model_names_ok, responses)
-                )
-                + "\n\nProvide your final, definitive answer."
+            revision_prompt = self._build_debate_prompt(
+                prompt, model_names_ok, responses,
+                "Provide your final, definitive answer.",
             )
-            revision_tasks = [
-                self.query_model(
-                    m, revision_prompt, temperature=max(0.3, temperature - 0.2)
-                )
+            revision_responses = await asyncio.gather(*[
+                self.query_model(m, revision_prompt, temperature=max(0.3, temperature - 0.2))
                 for m in model_names_ok
-            ]
-            revision_responses = await asyncio.gather(*revision_tasks)
+            ])
             debate_waves += 1
-            responses = [
-                r.get("response", orig) if r.get("success") else orig
-                for r, orig in zip(revision_responses, responses)
-            ]
+            responses = self._merge_wave_responses(revision_responses, responses)
 
         # Vote with emotional weighting
         personalities = [
@@ -152,9 +132,8 @@ class SwarmOrchestrator:
             responses, weights_ok, personalities, model_names_ok
         )
 
-        # Apply emotional drift
-        for name, resp in zip(model_names_ok, responses):
-            profile = self.personality_loader.get_profile(name)
+        # Apply emotional drift (reuse personalities from voting)
+        for profile, resp in zip(personalities, responses):
             agreed = resp.strip().lower() == winner.strip().lower()
             self.emotional_voting.apply_emotional_drift(
                 profile, agent_agreed_with_majority=agreed
@@ -172,6 +151,22 @@ class SwarmOrchestrator:
             "debate_waves": debate_waves,
             "coordination_level": self.coordination.level,
         }
+
+    @staticmethod
+    def _build_debate_prompt(
+        question: str, names: list[str], responses: list[str], instruction: str,
+    ) -> str:
+        entries = "\n".join(f"- {n}: {r}" for n, r in zip(names, responses))
+        return f"Original question: {question}\n\n{entries}\n\n{instruction}"
+
+    @staticmethod
+    def _merge_wave_responses(
+        wave_responses: list[dict], previous: list[str],
+    ) -> list[str]:
+        return [
+            r.get("response", orig) if r.get("success") else orig
+            for r, orig in zip(wave_responses, previous)
+        ]
 
     async def semantic_confidence(
         self,

@@ -1,6 +1,6 @@
 """Agent Communication Protocol (ACP) - Core modules for agent messaging and coordination."""
 
-from .message import PersonalityProfile, AgentIdentity, ACPMessage
+from .message import PersonalityProfile, AgentIdentity, ACPMessage, AgentStatus, ChannelType
 from .registry import AgentRegistry
 from .coordination import CoordinationController
 from .wave_controller import Task, WaveResult, WaveController
@@ -16,4 +16,6 @@ __all__ = [
     "WaveResult",
     "WaveController",
     "ACPMessageBus",
+    "AgentStatus",
+    "ChannelType",
 ]
