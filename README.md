@@ -102,6 +102,22 @@ ollama:
 ## 🧪 Testing
 Run tests: `python -m pytest tests/ -v`
 
+## 📚 Documentation
+
+### Agent Harness Implementation Annex
+
+For detailed documentation on reasoning strategies, communication mechanisms, and architecture, see **[AGENT_HARNESS_ANNEX.md](AGENT_HARNESS_ANNEX.md)**.
+
+**Key Topics Covered**:
+- **Test Results**: 116 tests (94.8% pass rate)
+- **Reasoning Strategies**: Chain-of-Thought, ReAct, Debate Waves
+- **Communication Protocols**: ACP Message Bus, Coordination Controller, Wave Controller
+- **Emotional Voting**: Personality-based weighted voting with stress dynamics
+- **Frontend Design**: SvelteKit architecture, UX patterns, accessibility
+- **API Architecture**: RESTful endpoints, WebSocket streaming
+- **Performance**: Concurrency model, caching strategies, resource management
+- **Deployment**: Docker setup, production checklist, troubleshooting
+
 ---
 
 <div align="center">
