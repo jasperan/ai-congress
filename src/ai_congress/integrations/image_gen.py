@@ -9,16 +9,25 @@ from pathlib import Path
 import asyncio
 from datetime import datetime
 
-# Hugging Face Diffusers for local image generation
-try:
-    from diffusers import StableDiffusionPipeline
-    import torch
-    DIFFUSERS_AVAILABLE = True
-except ImportError:
-    DIFFUSERS_AVAILABLE = False
-    logger.warning("diffusers not installed. Install with: pip install diffusers torch accelerate")
-
 logger = logging.getLogger(__name__)
+
+# Hugging Face Diffusers for local image generation (lazy import to avoid torch version conflicts)
+DIFFUSERS_AVAILABLE = None  # Will be determined on first use
+StableDiffusionPipeline = None
+torch = None
+
+def _ensure_diffusers():
+    global DIFFUSERS_AVAILABLE, StableDiffusionPipeline, torch
+    if DIFFUSERS_AVAILABLE is None:
+        try:
+            from diffusers import StableDiffusionPipeline as _SDP
+            import torch as _torch
+            StableDiffusionPipeline = _SDP
+            torch = _torch
+            DIFFUSERS_AVAILABLE = True
+        except (ImportError, RuntimeError) as e:
+            DIFFUSERS_AVAILABLE = False
+            logger.warning(f"diffusers not available: {e}. Install with: pip install diffusers torch accelerate")
 
 
 class ImageGenerator:
@@ -44,6 +53,7 @@ class ImageGenerator:
             height: Default image height
             device: Device to use (auto, cpu, cuda)
         """
+        _ensure_diffusers()
         if not DIFFUSERS_AVAILABLE:
             raise ImportError("diffusers library not available. Install with: pip install diffusers torch accelerate")
 

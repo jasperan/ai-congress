@@ -210,3 +210,12 @@ __marimo__/
 # Project-specific configuration
 # Ignore config file as it may contain environment-specific settings
 config/config.yaml
+CLAUDE.md
+
+# Claude-generated output (plans, dogfood, skill artifacts)
+docs/plans/
+task_plan.md
+findings.md
+progress.md
+dogfood-output/
+.playwright-mcp/

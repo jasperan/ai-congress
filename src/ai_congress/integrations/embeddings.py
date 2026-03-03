@@ -5,10 +5,20 @@ Provides text embedding generation using sentence-transformers
 import logging
 from typing import List, Union
 import numpy as np
-from sentence_transformers import SentenceTransformer
-import torch
 
 logger = logging.getLogger(__name__)
+
+# Lazy imports for sentence_transformers and torch (heavy ML deps)
+SentenceTransformer = None
+torch = None
+
+def _ensure_ml_deps():
+    global SentenceTransformer, torch
+    if SentenceTransformer is None:
+        from sentence_transformers import SentenceTransformer as _ST
+        import torch as _torch
+        SentenceTransformer = _ST
+        torch = _torch
 
 
 class EmbeddingGenerator:
@@ -17,13 +27,14 @@ class EmbeddingGenerator:
     def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2", device: str = None):
         """
         Initialize embedding generator
-        
+
         Args:
             model_name: Name of the sentence-transformers model
             device: Device to use ('cuda' or 'cpu'). Auto-detect if None
         """
+        _ensure_ml_deps()
         self.model_name = model_name
-        
+
         # Auto-detect device if not specified
         if device is None:
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
