@@ -1,0 +1,32 @@
+{
+    "phi3:3.8b": {
+        "openness": 8, "conscientiousness": 7, "extraversion": 4,
+        "agreeableness": 6, "neuroticism": 3,
+        "confidence": 0.7, "stress": 2, "engagement": 8,
+        "communication_style": "analytical"
+    },
+    "mistral:7b": {
+        "openness": 6, "conscientiousness": 8, "extraversion": 7,
+        "agreeableness": 5, "neuroticism": 4,
+        "confidence": 0.8, "stress": 3, "engagement": 7,
+        "communication_style": "balanced"
+    },
+    "llama3.2:3b": {
+        "openness": 7, "conscientiousness": 5, "extraversion": 8,
+        "agreeableness": 7, "neuroticism": 5,
+        "confidence": 0.6, "stress": 4, "engagement": 6,
+        "communication_style": "conversational"
+    },
+    "deepseek-r1:1.5b": {
+        "openness": 9, "conscientiousness": 6, "extraversion": 3,
+        "agreeableness": 4, "neuroticism": 6,
+        "confidence": 0.5, "stress": 5, "engagement": 9,
+        "communication_style": "analytical"
+    },
+    "qwen3:8b": {
+        "openness": 7, "conscientiousness": 8, "extraversion": 5,
+        "agreeableness": 6, "neuroticism": 3,
+        "confidence": 0.75, "stress": 2, "engagement": 7,
+        "communication_style": "precise"
+    }
+}
