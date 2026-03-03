@@ -2,12 +2,19 @@
 Swarm Orchestrator - Coordinates concurrent LLM requests and aggregates responses
 """
 import asyncio
+import os
 from typing import List, Dict, Optional
 from .voting_engine import VotingEngine
 from .model_registry import ModelRegistry
 from .ollama_client import OllamaClient
 from ..utils.config_loader import OllamaConfig, load_config
 from ..utils.logger import debug_action, info_message, swarm_status_panel, truncate_text, error_message
+from .acp.registry import AgentRegistry
+from .acp.coordination import CoordinationController
+from .acp.message_bus import ACPMessageBus
+from .acp.message import AgentIdentity
+from .personality.profile import ModelPersonalityLoader
+from .personality.emotional_voting import EmotionalVotingEngine
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,7 +28,8 @@ class SwarmOrchestrator:
         self,
         model_registry: ModelRegistry,
         voting_engine: VotingEngine,
-        ollama_config: OllamaConfig
+        ollama_config: OllamaConfig,
+        coordination_level: str = "moderate",
     ):
         self.model_registry = model_registry
         self.voting_engine = voting_engine
@@ -31,6 +39,139 @@ class SwarmOrchestrator:
             max_retries=ollama_config.max_retries
         )
         self.max_concurrent = 10
+
+        # ACP components
+        personality_config = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "config", "models_personality.json"
+        )
+        self.personality_loader = ModelPersonalityLoader(personality_config)
+        self.registry = AgentRegistry()
+        self.coordination = CoordinationController(level=coordination_level)
+        self.message_bus = ACPMessageBus()
+        self.emotional_voting = EmotionalVotingEngine()
+
+    def register_model_agents(self, model_names: list[str]) -> None:
+        """Register LLM models as ACP agents with personality profiles."""
+        for name in model_names:
+            profile = self.personality_loader.get_profile(name)
+            identity = AgentIdentity(
+                name=name,
+                role="voter",
+                personality=profile,
+                capabilities=["reasoning", "voting"],
+            )
+            self.registry.register(identity)
+            self.message_bus.register_agent(name)
+
+    async def multi_model_swarm_with_debate(
+        self,
+        prompt: str,
+        models: list[str],
+        temperature: float = 0.7,
+        history: list[dict] | None = None,
+    ) -> dict:
+        """Enhanced multi-model swarm with debate waves based on coordination level.
+
+        - none/minimal: Single wave (query all -> vote)
+        - moderate: Initial + 1 critique wave
+        - chatty: Initial + critique + revision wave
+        """
+        self.register_model_agents(models)
+        weights = [self.model_registry.get_model_weight(m) for m in models]
+        debate_waves = 0
+
+        # Wave 1: Initial responses
+        initial_tasks = [
+            self.query_model(m, prompt, temperature=temperature)
+            for m in models
+        ]
+        initial_responses = await asyncio.gather(*initial_tasks)
+        debate_waves += 1
+
+        responses = [r.get("response", "") for r in initial_responses if r.get("success")]
+        model_names_ok = [
+            r.get("model", m)
+            for r, m in zip(initial_responses, models)
+            if r.get("success")
+        ]
+        weights_ok = [
+            w for r, w in zip(initial_responses, weights) if r.get("success")
+        ]
+
+        # Wave 2: Critique wave (moderate or chatty)
+        if self.coordination.level in ("moderate", "chatty") and len(responses) > 1:
+            critique_prompt = (
+                f"Original question: {prompt}\n\n"
+                f"Other models responded:\n"
+                + "\n".join(
+                    f"- {name}: {resp}"
+                    for name, resp in zip(model_names_ok, responses)
+                )
+                + "\n\nReview these responses and provide your revised answer."
+            )
+            critique_tasks = [
+                self.query_model(m, critique_prompt, temperature=temperature)
+                for m in model_names_ok
+            ]
+            critique_responses = await asyncio.gather(*critique_tasks)
+            debate_waves += 1
+            responses = [
+                r.get("response", orig) if r.get("success") else orig
+                for r, orig in zip(critique_responses, responses)
+            ]
+
+        # Wave 3: Final revision (chatty only)
+        if self.coordination.level == "chatty" and len(responses) > 1:
+            revision_prompt = (
+                f"Original question: {prompt}\n\n"
+                f"After debate, the current positions are:\n"
+                + "\n".join(
+                    f"- {name}: {resp}"
+                    for name, resp in zip(model_names_ok, responses)
+                )
+                + "\n\nProvide your final, definitive answer."
+            )
+            revision_tasks = [
+                self.query_model(
+                    m, revision_prompt, temperature=max(0.3, temperature - 0.2)
+                )
+                for m in model_names_ok
+            ]
+            revision_responses = await asyncio.gather(*revision_tasks)
+            debate_waves += 1
+            responses = [
+                r.get("response", orig) if r.get("success") else orig
+                for r, orig in zip(revision_responses, responses)
+            ]
+
+        # Vote with emotional weighting
+        personalities = [
+            self.personality_loader.get_profile(m) for m in model_names_ok
+        ]
+        winner, confidence, vote_details = self.emotional_voting.emotional_weighted_vote(
+            responses, weights_ok, personalities, model_names_ok
+        )
+
+        # Apply emotional drift
+        for name, resp in zip(model_names_ok, responses):
+            profile = self.personality_loader.get_profile(name)
+            agreed = resp.strip().lower() == winner.strip().lower()
+            self.emotional_voting.apply_emotional_drift(
+                profile, agent_agreed_with_majority=agreed
+            )
+
+        return {
+            "responses": [
+                {"model": m, "response": r, "success": True}
+                for m, r in zip(model_names_ok, responses)
+            ],
+            "final_answer": winner,
+            "confidence": confidence,
+            "vote_breakdown": vote_details,
+            "models_used": model_names_ok,
+            "debate_waves": debate_waves,
+            "coordination_level": self.coordination.level,
+        }
 
     async def semantic_confidence(
         self,
