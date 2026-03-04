@@ -99,6 +99,34 @@ ollama:
 ## 🐳 Docker Setup
 1. **Run Everything**: `docker-compose up -d` (starts API :8000, frontend :3000)
 
+## 📸 Frontend Screenshots
+
+The AI Congress frontend features a **Capitol Modern** design aesthetic, blending government architecture with futuristic civic tech.
+
+### UI Components Showcase
+
+Located in `assets/screenshots/`:
+
+| Screenshot | Description |
+|------------|-------------|
+| `01-hero.png` | Main dashboard with model selection and congress overview |
+| `02-chat-interface.png` | Multi-model chat interface with real-time voting visualization |
+| `03-personality-swarm.png` | Character-based agent interactions with personality profiles |
+| `04-dark-mode.png` | Dark theme variant with navy/gold palette |
+| `05-mobile-view.png` | Responsive mobile layout |
+
+### Design System Highlights
+
+- **Typography**: Playfair Display (headings) + Inter (body)
+- **Color Palette**: Deep navy (#0f172a), marble white (#f8fafc), gold accents (#d4af37)
+- **Key Features**:
+  - Glass morphism cards with subtle shadows
+  - Animated loading states with capitol dome inspiration
+  - Accessible tab navigation for Model vs Personality modes
+  - Real-time model status indicators with pulse animations
+
+---
+
 ## 🧪 Testing
 Run tests: `python -m pytest tests/ -v`
 
