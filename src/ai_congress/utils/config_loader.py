@@ -24,10 +24,21 @@ class SwarmConfig(BaseModel):
     request_timeout: int = 60
 
 
+class DebateVotingConfig(BaseModel):
+    enabled: bool = True
+    max_rounds: int = 3
+    temp_schedule: list = Field(default_factory=lambda: [0.9, 0.5, 0.2])
+    conviction_bonus: float = 1.2
+
+
 class VotingConfig(BaseModel):
     default_algorithm: str = "weighted_majority"
     consensus_threshold: float = 0.6
     enable_clustering: bool = True
+    summarizer_model: str = "phi3:3.8b"
+    semantic_confidence_threshold: float = 0.6
+    mode: str = "classic"
+    debate: DebateVotingConfig = Field(default_factory=DebateVotingConfig)
 
 
 class ModelWeights(BaseModel):

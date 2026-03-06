@@ -6,6 +6,8 @@ import os
 from typing import List, Dict, Optional
 from .voting_engine import VotingEngine
 from .model_registry import ModelRegistry
+from .semantic_voting import SemanticVotingEngine, ModelResponse
+from .debate_manager import DebateManager, DebateConfig
 from .ollama_client import OllamaClient
 from ..utils.config_loader import OllamaConfig, load_config
 from ..utils.logger import debug_action, info_message, swarm_status_panel, truncate_text, error_message
@@ -344,7 +346,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
-        reasoning_mode: Optional[str] = None
+        reasoning_mode: Optional[str] = None,
+        voting_mode: str = "classic",
     ) -> Dict:
         """
         Query multiple different models concurrently
@@ -390,6 +393,11 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         texts = [r['response'] for r in successful]
         model_names = [r['model'] for r in successful]
 
+        if voting_mode == "semantic":
+            return await self._semantic_vote(
+                prompt, successful, weights, model_names, texts, responses, temperature
+            )
+
         final_answer, confidence, vote_breakdown = self.voting_engine.weighted_majority_vote(
             texts, weights, model_names
         )
@@ -407,6 +415,53 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             'vote_breakdown': vote_breakdown,
             'models_used': model_names,
             'weights': weights
+        }
+
+    async def _semantic_vote(self, prompt, successful, weights, model_names, texts, all_responses, temperature):
+        """Run semantic voting with optional debate escalation."""
+        sve = SemanticVotingEngine(
+            ollama_client=self.ollama_client,
+            consensus_threshold=config.voting.consensus_threshold,
+        )
+        model_responses = [
+            ModelResponse(name, text, weight, temperature)
+            for name, text, weight in zip(model_names, texts, weights)
+        ]
+
+        result = await sve.vote(model_responses)
+
+        if result is not None:
+            return {
+                "responses": all_responses,
+                "final_answer": result.winner,
+                "confidence": result.consensus,
+                "semantic_vote": result.to_dict(),
+                "models_used": model_names,
+                "weights": weights,
+            }
+
+        # No consensus — run debate
+        debate_cfg_raw = config.voting.debate
+        debate_cfg = DebateConfig(
+            max_rounds=debate_cfg_raw.max_rounds,
+            consensus_threshold=config.voting.consensus_threshold,
+            temp_schedule=debate_cfg_raw.temp_schedule,
+            conviction_bonus=debate_cfg_raw.conviction_bonus,
+        )
+        clusters, analysis = await sve.judge_group(model_responses)
+        dm = DebateManager(
+            ollama_client=self.ollama_client,
+            voting_engine=sve,
+            config=debate_cfg,
+        )
+        debate_result = await dm.run_debate(prompt, model_responses, clusters, analysis)
+        return {
+            "responses": all_responses,
+            "final_answer": debate_result.winner,
+            "confidence": debate_result.consensus,
+            "semantic_vote": debate_result.to_dict(),
+            "models_used": model_names,
+            "weights": weights,
         }
 
     async def multi_request_swarm(
