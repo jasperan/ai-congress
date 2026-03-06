@@ -24,6 +24,7 @@
   let searchWeb = false
   let showDocuments = false
   let showImageGen = false
+  let votingMode = 'classic' // classic | semantic
   let documentsRefresh = 0
   let selectedDocuments = []
 
@@ -109,7 +110,8 @@
             prompt: currentPrompt,
             models: selectedModels,
             mode: mode,
-            stream: true
+            stream: true,
+            voting_mode: votingMode
           }))
         }
 
@@ -196,7 +198,8 @@
           models: selectedModels,
           mode,
           use_rag: useRAG,
-          search_web: searchWeb
+          search_web: searchWeb,
+          voting_mode: votingMode
         }
 
         if (useRAG && selectedDocuments.length > 0) {
@@ -370,6 +373,21 @@
       >
         🎨 Image Gen
       </button>
+
+      <!-- Voting Mode Toggle -->
+      <div class="flex items-center space-x-2 ml-2 pl-2 border-l border-surface-300 dark:border-surface-600">
+        <label for="voting-mode" class="text-sm font-semibold text-text-primary dark:text-text-primary whitespace-nowrap">
+          Voting:
+        </label>
+        <select
+          id="voting-mode"
+          bind:value={votingMode}
+          class="input-field text-sm py-1 px-2 w-auto cursor-pointer focus:ring-2 focus:ring-primary focus:border-primary-500"
+        >
+          <option value="classic">Classic</option>
+          <option value="semantic">Semantic</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -555,6 +573,7 @@
           voteBreakdown={currentResult.vote_breakdown || {}}
           confidence={currentResult.confidence || 0}
           semanticConfidence={currentResult.semantic_confidence}
+          semanticVote={currentResult.semantic_vote || null}
         />
       {/if}
 

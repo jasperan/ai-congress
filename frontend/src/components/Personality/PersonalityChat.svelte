@@ -49,9 +49,8 @@
 
   // Load personalities when component mounts
   import { onMount } from 'svelte'
-  onMount(async () => {
-    await loadPersonalities()
-    await loadPersonalityLists()
+  onMount(() => {
+    Promise.all([loadPersonalities(), loadPersonalityLists()])
   })
 
   async function sendMessage() {
