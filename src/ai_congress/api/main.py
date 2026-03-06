@@ -26,6 +26,10 @@ from ..integrations.web_browser import get_web_browser
 from ..integrations.image_gen import get_image_generator
 from ..utils.config_loader import load_config
 from ..utils.logger import info_message, error_message, truncate_text
+from ..datalake.connection import OraclePoolManager
+from ..datalake.schema import init_schema
+from ..datalake.logger import EventLogger
+from ..datalake.middleware import DataLakeMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +92,10 @@ voice_transcriber = None
 web_search_engine = None
 web_browser = None
 image_generator = None
+
+# Data lake (Oracle 26ai Free)
+oracle_pool = OraclePoolManager()
+event_logger = EventLogger(oracle_pool)
 
 
 # Pydantic models
@@ -183,9 +191,30 @@ async def startup_event():
     logger.info(f"   • Advanced Extractors: {config.document_extraction.use_advanced_extractors}")
     logger.info(f"   • Max Concurrent Requests: {config.swarm.max_concurrent_requests}")
     
+    # Initialize data lake (Oracle 26ai Free)
+    logger.info("")
+    logger.info("🗄️  Initializing Data Lake (Oracle 26ai Free)...")
+    try:
+        await oracle_pool.start()
+        await init_schema(oracle_pool)
+        event_logger.start()
+        app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
+        logger.info("   ✓ Data lake initialized")
+    except Exception as e:
+        logger.warning(f"   ⚠ Data lake unavailable (app continues without it): {e}")
+
     logger.info("")
     logger.info("✅ AI Congress API started successfully!")
     logger.info("=" * 80)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("Shutting down AI Congress API...")
+    await event_logger.stop()
+    await oracle_pool.stop()
+    logger.info("Shutdown complete")
 
 
 @app.get("/")
@@ -212,7 +241,11 @@ async def list_models():
 async def chat(request: ChatRequest):
     """Process chat request through swarm"""
     global rag_engine, web_search_engine
-    
+
+    # Data lake session
+    dl_session = event_logger.new_session()
+    chat_start = time.time()
+
     try:
         # Log the incoming request
         if request.mode == "personality":
@@ -221,6 +254,17 @@ async def chat(request: ChatRequest):
         else:
             model_count = len(request.models)
             info_message("CHAT_REQUEST", f"{request.mode.upper()} Mode", f"Prompt: {truncate_text(request.prompt, 50)}... with {model_count} models")
+
+        # Log session to data lake
+        await event_logger.log_session(
+            dl_session, request.prompt, request.mode,
+            request.voting_mode, request.models or [],
+        )
+        event_logger.log("chat_request", dl_session,
+            mode=request.mode, voting_mode=request.voting_mode,
+            model_count=len(request.models or []),
+            use_rag=request.use_rag, search_web=request.search_web,
+        )
 
         # Initialize prompt (may be augmented with RAG/web search)
         augmented_prompt = request.prompt
@@ -323,15 +367,40 @@ async def chat(request: ChatRequest):
         # Add context sources to result
         if context_sources:
             result['context_sources'] = context_sources
-        
+
         # Add web search results to response if available
         if web_search_results:
             result['web_search_results'] = web_search_results
-        
+
+        # Log result to data lake
+        latency_ms = int((time.time() - chat_start) * 1000)
+        event_logger.log("chat_response", dl_session,
+            latency_ms=latency_ms,
+            confidence=result.get("confidence", 0),
+            models_used=result.get("models_used", []),
+        )
+        # Log vote data if present
+        semantic_vote = result.get("semantic_vote")
+        if semantic_vote:
+            await event_logger.log_vote(
+                dl_session, request.voting_mode,
+                semantic_vote.get("winning_model", ""),
+                semantic_vote.get("consensus", 0),
+                len(semantic_vote.get("clusters", [])),
+                semantic_vote,
+            )
+        elif result.get("vote_breakdown"):
+            await event_logger.log_vote(
+                dl_session, "classic", "",
+                result.get("confidence", 0), 0,
+                result.get("vote_breakdown"),
+            )
+
         return result
 
     except Exception as e:
         logger.error(f"Chat error: {e}")
+        event_logger.log("chat_error", dl_session, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -340,6 +409,7 @@ async def websocket_chat(websocket: WebSocket):
     """WebSocket endpoint for streaming chat"""
     await websocket.accept()
     logger.info("WebSocket connection established")
+    event_logger.log("ws_connect")
 
     try:
         while True:
@@ -352,6 +422,15 @@ async def websocket_chat(websocket: WebSocket):
             stream = data.get('stream', False)
             temperatures = data.get('temperatures', None)
             voting_mode = data.get('voting_mode', 'classic')
+
+            # Data lake session for this WS message
+            ws_session = event_logger.new_session()
+            ws_start = time.time()
+            await event_logger.log_session(ws_session, prompt, mode, voting_mode, models)
+            event_logger.log("chat_request", ws_session,
+                mode=mode, voting_mode=voting_mode,
+                model_count=len(models), stream=True,
+            )
 
             # Send acknowledgment
             if mode == "hybrid":
@@ -459,13 +538,32 @@ async def websocket_chat(websocket: WebSocket):
                 'content': result['final_answer'],
                 'confidence': result.get('confidence', 0),
                 'semantic_confidence': result.get('semantic_confidence', 0),
-                'vote_breakdown': result.get('vote_breakdown', {})
+                'vote_breakdown': result.get('vote_breakdown', {}),
+                'semantic_vote': result.get('semantic_vote'),
             })
+
+            # Log to data lake
+            ws_latency = int((time.time() - ws_start) * 1000)
+            event_logger.log("chat_response", ws_session,
+                latency_ms=ws_latency,
+                confidence=result.get("confidence", 0),
+                models_used=result.get("models_used", []),
+            )
+            semantic_vote = result.get("semantic_vote")
+            if semantic_vote:
+                await event_logger.log_vote(
+                    ws_session, voting_mode,
+                    semantic_vote.get("winning_model", ""),
+                    semantic_vote.get("consensus", 0),
+                    len(semantic_vote.get("clusters", [])),
+                    semantic_vote,
+                )
 
             await websocket.send_json({'type': 'end'})
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
+        event_logger.log("ws_disconnect")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         await websocket.send_json({
@@ -598,13 +696,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
         # Clean up
         os.unlink(tmp_path)
         
+        event_logger.log("audio_transcribe", language=result.get('language', ''))
         return {
             "success": True,
             "text": result['text'],
             "language": result['language'],
             "segments": result['segments']
         }
-        
+
     except Exception as e:
         logger.error(f"Transcription error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -635,6 +734,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
         # Process document in background
         background_tasks.add_task(rag_engine.process_document, file_path)
 
+        event_logger.log("doc_upload", document_id=document_id, filename=file.filename)
         return {
             "success": True,
             "document_id": document_id,
@@ -782,7 +882,8 @@ async def generate_image(request: ImageGenRequest):
             height=request.height,
             seed=request.seed
         )
-        
+
+        event_logger.log("image_generate", prompt_length=len(request.prompt))
         return result
         
     except Exception as e:
