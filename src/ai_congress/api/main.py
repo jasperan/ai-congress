@@ -96,6 +96,7 @@ image_generator = None
 # Data lake (Oracle 26ai Free)
 oracle_pool = OraclePoolManager()
 event_logger = EventLogger(oracle_pool)
+app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
 
 
 # Pydantic models
@@ -198,7 +199,6 @@ async def startup_event():
         await oracle_pool.start()
         await init_schema(oracle_pool)
         event_logger.start()
-        app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
         logger.info("   ✓ Data lake initialized")
     except Exception as e:
         logger.warning(f"   ⚠ Data lake unavailable (app continues without it): {e}")
