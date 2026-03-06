@@ -118,6 +118,7 @@ class ChatRequest(BaseModel):
     use_rag: bool = False  # Enable RAG
     search_web: bool = False  # Enable web search
     document_ids: Optional[List[str]] = None  # Specific documents for RAG
+    voting_mode: str = "classic"  # classic | semantic
 
 
 class ModelInfo(BaseModel):
@@ -283,7 +284,8 @@ async def chat(request: ChatRequest):
                 models=request.models,
                 prompt=augmented_prompt,
                 system_prompt=request.system_prompt,
-                temperature=request.temperature
+                temperature=request.temperature,
+                voting_mode=request.voting_mode
             )
         elif request.mode == "multi_request":
             temps = request.temperatures or [0.3, 0.7, 1.0]
@@ -349,6 +351,7 @@ async def websocket_chat(websocket: WebSocket):
             mode = data.get('mode', 'multi_model')
             stream = data.get('stream', False)
             temperatures = data.get('temperatures', None)
+            voting_mode = data.get('voting_mode', 'classic')
 
             # Send acknowledgment
             if mode == "hybrid":
@@ -367,7 +370,8 @@ async def websocket_chat(websocket: WebSocket):
             if mode == "multi_model":
                 result = await swarm.multi_model_swarm(
                     models=models,
-                    prompt=prompt
+                    prompt=prompt,
+                    voting_mode=voting_mode
                 )
             elif mode == "multi_request":
                 temps = temperatures or [0.3, 0.7, 1.0]
