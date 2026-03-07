@@ -5,6 +5,7 @@ from .message import AgentIdentity, AgentStatus
 class AgentRegistry:
     def __init__(self):
         self.agents: dict[str, AgentIdentity] = {}
+        self._heartbeat_states: dict[str, str] = {}
 
     def register(self, agent: AgentIdentity) -> None:
         self.agents[agent.name] = agent
@@ -34,4 +35,18 @@ class AgentRegistry:
         return [
             name for name, agent in self.agents.items()
             if (now - agent.last_active) > threshold_seconds
+        ]
+
+    def update_heartbeat_state(self, name: str, state: str) -> None:
+        if name in self.agents:
+            self._heartbeat_states[name] = state
+
+    def get_heartbeat_state(self, name: str) -> str | None:
+        return self._heartbeat_states.get(name)
+
+    def get_agents_by_heartbeat_state(self, state: str) -> list[AgentIdentity]:
+        return [
+            self.agents[name]
+            for name, s in self._heartbeat_states.items()
+            if s == state and name in self.agents
         ]

@@ -1,6 +1,15 @@
+import asyncio
 import random
 from collections import defaultdict
+from enum import Enum
+
 from .message import AgentIdentity
+
+
+class MessageProtocol(str, Enum):
+    FIRE_AND_FORGET = "fire_and_forget"
+    ACK_REQUIRED = "ack_required"
+    CONFIRMED = "confirmed"
 
 
 class CoordinationController:
@@ -40,3 +49,33 @@ class CoordinationController:
         keys_to_remove = [k for k in self._message_counts if k[1] == round_id]
         for k in keys_to_remove:
             del self._message_counts[k]
+
+    async def send_with_protocol(
+        self,
+        bus,
+        message,
+        protocol: MessageProtocol = MessageProtocol.FIRE_AND_FORGET,
+        timeout: float = 30.0,
+    ):
+        bus.send(message)
+
+        if protocol == MessageProtocol.FIRE_AND_FORGET:
+            return None
+
+        if protocol in (MessageProtocol.ACK_REQUIRED, MessageProtocol.CONFIRMED):
+            expected_type = "ack" if protocol == MessageProtocol.ACK_REQUIRED else "confirm"
+            return await self._wait_for_response(
+                bus, message.sender.name, message.id, expected_type, timeout,
+            )
+
+        return None
+
+    async def _wait_for_response(self, bus, sender_name, message_id, expected_type, timeout):
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            messages = bus.get_messages(sender_name, clear=True)
+            for msg in messages:
+                if msg.msg_type == expected_type and msg.payload.get("ack_for") == message_id:
+                    return msg
+            await asyncio.sleep(0.02)
+        return None

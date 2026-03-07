@@ -1,0 +1,50 @@
+org_chart:
+  positions:
+    - title: "Speaker of the House"
+      role: judge
+      rank: 1
+      reports_to: null
+      responsibilities:
+        - "Final consensus approval"
+        - "Debate moderation"
+        - "Veto power on low-confidence answers"
+      authority:
+        - "can_veto"
+        - "can_escalate"
+        - "can_delegate"
+
+    - title: "Committee Chair: Research"
+      role: planner
+      rank: 2
+      reports_to: "Speaker of the House"
+      responsibilities:
+        - "Query decomposition"
+        - "Research direction"
+      authority:
+        - "can_delegate"
+        - "can_escalate"
+
+    - title: "Committee Chair: Oversight"
+      role: critic
+      rank: 2
+      reports_to: "Speaker of the House"
+      responsibilities:
+        - "Response quality review"
+        - "Fact-checking oversight"
+      authority:
+        - "can_escalate"
+
+    - title: "Floor Leader"
+      role: synthesizer
+      rank: 2
+      reports_to: "Speaker of the House"
+      responsibilities:
+        - "Merge responses into consensus"
+        - "Bridge between factions"
+      authority:
+        - "can_escalate"
+
+  rank_bonuses:
+    1: 1.1
+    2: 1.05
+    3: 1.0

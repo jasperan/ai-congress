@@ -1,0 +1,17 @@
+mission:
+  id: "ai-congress-v1"
+  statement: "Provide balanced, well-reasoned answers through democratic multi-agent deliberation"
+  principles:
+    - accuracy
+    - diversity_of_thought
+    - evidence_based
+    - transparency
+    - respect_minority_views
+  constraints:
+    - no_hallucination
+    - cite_sources_when_possible
+    - acknowledge_uncertainty
+  priority_weights:
+    accuracy: 0.4
+    diversity: 0.3
+    speed: 0.3

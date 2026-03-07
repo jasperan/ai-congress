@@ -65,3 +65,42 @@ class ACPMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class ResponsePayload:
+    """Typed payload for agent response messages."""
+    text: str
+    confidence: float
+    reasoning_mode: str
+    evidence: list[str] = field(default_factory=list)
+    alignment_score: float = 1.0
+
+
+@dataclass
+class VotePayload:
+    """Typed payload for agent vote messages."""
+    chosen_cluster: int
+    conviction: float
+    rationale: str
+    dissent_notes: str | None = None
+
+
+@dataclass
+class HandoffPayload:
+    """Typed payload for task delegation messages."""
+    task_type: str
+    context: str
+    constraints: list[str] = field(default_factory=list)
+    deadline_seconds: float = 60.0
+    escalation_path: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HeartbeatPayload:
+    """Typed payload for heartbeat status messages."""
+    state: str
+    health: str
+    tokens_remaining: int
+    mission_alignment: float
+    reflection: str | None = None

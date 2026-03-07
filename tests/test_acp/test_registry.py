@@ -68,3 +68,29 @@ class TestAgentRegistry:
         # Agent was just registered, last_active is recent
         stuck = self.registry.detect_stuck(threshold_seconds=900)
         assert "analyst" not in stuck
+
+
+class TestRegistryHeartbeatFields:
+    def setup_method(self):
+        self.registry = AgentRegistry()
+        self.agent = AgentIdentity(name="phi3", role="worker")
+        self.registry.register(self.agent)
+
+    def test_update_heartbeat_state(self):
+        self.registry.update_heartbeat_state("phi3", "ready")
+        assert self.registry.get_heartbeat_state("phi3") == "ready"
+
+    def test_update_heartbeat_state_unknown_agent(self):
+        self.registry.update_heartbeat_state("unknown", "ready")
+        assert self.registry.get_heartbeat_state("unknown") is None
+
+    def test_get_heartbeat_state_default(self):
+        assert self.registry.get_heartbeat_state("phi3") is None
+
+    def test_get_agents_by_heartbeat_state(self):
+        self.registry.register(AgentIdentity(name="mistral", role="critic"))
+        self.registry.update_heartbeat_state("phi3", "ready")
+        self.registry.update_heartbeat_state("mistral", "sleeping")
+        ready = self.registry.get_agents_by_heartbeat_state("ready")
+        assert len(ready) == 1
+        assert ready[0].name == "phi3"
