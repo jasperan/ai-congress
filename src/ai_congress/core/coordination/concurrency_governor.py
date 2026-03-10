@@ -12,8 +12,9 @@ DEFAULT_THRESHOLDS = {0.8: 1, 0.5: 3, 0.0: 5}
 class ConcurrencyGovernor:
     """Dynamically limits model query parallelism based on GPU VRAM usage.
 
-    Polls nvidia-smi at a configurable interval and adjusts an asyncio.Semaphore
-    to control how many model queries can run concurrently.
+    Polls nvidia-smi at a configurable interval and adjusts the concurrency
+    limit. Uses an asyncio.Condition with explicit counter tracking so that
+    limit changes take effect immediately without creating fresh permits.
     """
 
     def __init__(
@@ -31,24 +32,27 @@ class ConcurrencyGovernor:
         self.gpu_index = gpu_index
 
         self._dynamic_limit = max_concurrent
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._cond = asyncio.Condition()
         self._poll_task: asyncio.Task | None = None
         self._running = False
 
+        # Stats
         self._vram_used: int = 0
-        self._vram_total: int = 1
+        self._vram_total: int = 1  # avoid division by zero
         self._gpu_util: int = 0
         self._current_usage: float = 0.0
         self._active_count: int = 0
         self._waiting_count: int = 0
 
     def _calculate_limit(self, usage_ratio: float) -> int:
+        """Map VRAM usage ratio to concurrency limit using thresholds."""
         for threshold in sorted(self.vram_thresholds.keys(), reverse=True):
             if usage_ratio >= threshold:
                 return self.vram_thresholds[threshold]
         return self.max_concurrent
 
     def _parse_nvidia_smi(self, output: str) -> tuple[int, int, int]:
+        """Parse nvidia-smi CSV output into (used_mb, total_mb, util_pct)."""
         try:
             parts = [p.strip() for p in output.strip().split(",")]
             return int(parts[0]), int(parts[1]), int(parts[2])
@@ -57,6 +61,7 @@ class ConcurrencyGovernor:
             return 0, 1, 0
 
     async def _poll_gpu_once(self) -> tuple[int, int, int]:
+        """Run nvidia-smi and return (used_mb, total_mb, util_pct)."""
         try:
             proc = await asyncio.create_subprocess_exec(
                 "nvidia-smi",
@@ -76,13 +81,14 @@ class ConcurrencyGovernor:
             return 0, 1, 0
 
     async def _poll_loop(self):
+        """Background loop that polls GPU state and adjusts the concurrency limit."""
         while self._running:
             try:
                 used, total, util = await self._poll_gpu_once()
                 self._vram_used = used
-                self._vram_total = total
+                self._vram_total = total if total > 0 else 1
                 self._gpu_util = util
-                self._current_usage = used / total if total > 0 else 0.0
+                self._current_usage = used / self._vram_total
 
                 new_limit = self._calculate_limit(self._current_usage)
                 new_limit = max(self.min_concurrent, min(self.max_concurrent, new_limit))
@@ -90,17 +96,21 @@ class ConcurrencyGovernor:
                 if new_limit != self._dynamic_limit:
                     old_limit = self._dynamic_limit
                     self._dynamic_limit = new_limit
-                    self._semaphore = asyncio.Semaphore(new_limit)
                     logger.info(
                         "GPU concurrency limit changed: %d -> %d (VRAM: %.0f%%)",
                         old_limit, new_limit, self._current_usage * 100,
                     )
+                    # Wake waiters — some may now fit under the new (higher) limit
+                    if new_limit > old_limit:
+                        async with self._cond:
+                            self._cond.notify_all()
             except Exception as e:
                 logger.warning("GPU poll loop error: %s", e)
 
             await asyncio.sleep(self.poll_interval)
 
     async def start(self):
+        """Start background GPU polling."""
         if self._running:
             return
         self._running = True
@@ -108,6 +118,7 @@ class ConcurrencyGovernor:
         logger.info("ConcurrencyGovernor started (poll_interval=%.1fs)", self.poll_interval)
 
     async def stop(self):
+        """Stop background GPU polling and wake all waiters."""
         self._running = False
         if self._poll_task:
             self._poll_task.cancel()
@@ -119,26 +130,35 @@ class ConcurrencyGovernor:
         logger.info("ConcurrencyGovernor stopped")
 
     async def acquire(self):
+        """Acquire a concurrency slot. Blocks if at the dynamic limit."""
         self._waiting_count += 1
-        sem = self._semaphore  # capture before await to avoid race with recreation
-        await sem.acquire()
+        try:
+            async with self._cond:
+                while self._active_count >= self._dynamic_limit:
+                    await self._cond.wait()
+                self._active_count += 1
+        except BaseException:
+            self._waiting_count -= 1
+            raise
         self._waiting_count -= 1
-        self._active_count += 1
-        return sem
 
-    def release(self, sem=None):
-        self._active_count -= 1
-        (sem or self._semaphore).release()
+    async def release(self):
+        """Release a concurrency slot and wake one waiter."""
+        async with self._cond:
+            self._active_count = max(0, self._active_count - 1)
+            self._cond.notify()
 
     @asynccontextmanager
     async def throttled(self):
-        sem = await self.acquire()
+        """Context manager for GPU-throttled execution."""
+        await self.acquire()
         try:
             yield self.get_stats()
         finally:
-            self.release(sem)
+            await self.release()
 
     def get_stats(self) -> dict:
+        """Return current GPU and concurrency stats."""
         return {
             "vram_used_mb": self._vram_used,
             "vram_total_mb": self._vram_total,

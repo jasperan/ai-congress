@@ -2,7 +2,7 @@
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from src.ai_congress.core.coordination.concurrency_governor import ConcurrencyGovernor
 
@@ -64,10 +64,10 @@ class TestConcurrencyGovernor:
     @pytest.mark.asyncio
     async def test_throttled_context_manager(self):
         gov = ConcurrencyGovernor()
-        gov._semaphore = asyncio.Semaphore(2)
         gov._dynamic_limit = 2
 
         acquired = []
+
         async def do_work(task_id):
             async with gov.throttled() as stats:
                 acquired.append(task_id)
@@ -80,7 +80,6 @@ class TestConcurrencyGovernor:
     @pytest.mark.asyncio
     async def test_concurrency_actually_limits(self):
         gov = ConcurrencyGovernor()
-        gov._semaphore = asyncio.Semaphore(1)
         gov._dynamic_limit = 1
 
         max_concurrent_seen = 0
@@ -96,6 +95,35 @@ class TestConcurrencyGovernor:
 
         await asyncio.gather(do_work(), do_work(), do_work())
         assert max_concurrent_seen == 1
+
+    @pytest.mark.asyncio
+    async def test_limit_change_blocks_new_arrivals(self):
+        """When the limit drops mid-flight, new tasks must wait for active ones to finish."""
+        gov = ConcurrencyGovernor()
+        gov._dynamic_limit = 3
+
+        events = []
+
+        async def long_task(task_id):
+            async with gov.throttled():
+                events.append(f"start-{task_id}")
+                await asyncio.sleep(0.1)
+                events.append(f"end-{task_id}")
+
+        async def late_task():
+            # Wait a bit, then reduce limit and try to acquire
+            await asyncio.sleep(0.02)
+            gov._dynamic_limit = 1  # drop limit while 2 tasks are active
+            async with gov.throttled():
+                events.append("start-late")
+                events.append(f"active_when_late={gov._active_count}")
+
+        await asyncio.gather(long_task("a"), long_task("b"), late_task())
+
+        # Late task must have started after at least one long task ended
+        late_idx = events.index("start-late")
+        ends_before_late = [e for e in events[:late_idx] if e.startswith("end-")]
+        assert len(ends_before_late) >= 1, f"Late task started too early: {events}"
 
     @pytest.mark.asyncio
     async def test_start_stop_lifecycle(self):
