@@ -263,6 +263,9 @@ class TestPrecedentInjector:
         assert resp["confidence"] == 0.95
         assert resp["precedent"]["action"] == "fast_follow"
         assert resp["precedent"]["disposition"] == "followed"
+        assert resp["responses"] == []
+        assert resp["models_used"] == ["m1"]
+        assert resp["vote_breakdown"] == {}
 
 
 class TestOrchestratorIntegration:

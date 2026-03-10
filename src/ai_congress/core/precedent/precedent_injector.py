@@ -30,6 +30,15 @@ class PrecedentInjector:
     FOLLOW_CONSENSUS = 0.85
     SOFT_SIMILARITY = 0.75
 
+    _DISTINGUISH_PATTERNS = [
+        re.compile(p) for p in [
+            r"\bI\s+DISTINGUISH\b",
+            r"\bDISTINGUISH\s+FROM\s+THE\s+PRIOR\b",
+            r"\bOVERRULE\b",
+            r"\bDISAGREE\s+WITH\s+THE\s+PRIOR\s+RULING\b",
+        ]
+    ]
+
     def classify_action(self, precedents: List[Precedent]) -> PrecedentAction:
         """Determine what action to take based on best matching precedent."""
         if not precedents:
@@ -78,22 +87,16 @@ class PrecedentInjector:
     def detect_distinguish(self, response_text: str) -> bool:
         """Check if a model's response explicitly distinguishes from precedent."""
         text_upper = response_text.upper()
-        distinguish_patterns = [
-            r"\bI\s+DISTINGUISH\b",
-            r"\bDISTINGUISH\s+FROM\s+THE\s+PRIOR\b",
-            r"\bOVERRULE\b",
-            r"\bDISAGREE\s+WITH\s+THE\s+PRIOR\s+RULING\b",
-        ]
-        for pattern in distinguish_patterns:
-            if re.search(pattern, text_upper):
-                return True
-        return False
+        return any(p.search(text_upper) for p in self._DISTINGUISH_PATTERNS)
 
     def build_fast_follow_response(self, precedent: Precedent) -> dict:
         """Build a response dict for FAST_FOLLOW short-circuit."""
         return {
             "final_answer": precedent.ruling_text,
             "confidence": precedent.consensus,
+            "responses": [],
+            "models_used": precedent.models_used,
+            "vote_breakdown": {},
             "precedent": {
                 "action": PrecedentAction.FAST_FOLLOW.value,
                 "cited": precedent.to_dict(),

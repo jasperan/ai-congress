@@ -5,6 +5,7 @@ Uses CONGRESS_PRECEDENTS table with VECTOR(384, FLOAT32) column for
 similarity search via Oracle AI Vector Search.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -77,7 +78,7 @@ class PrecedentStore:
         precedent_id = str(uuid.uuid4())
 
         try:
-            embedding = self._embedder.generate_embedding(query_text)
+            embedding = await asyncio.to_thread(self._embedder.generate_embedding, query_text)
             embedding_list = embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
 
             async with self._pool.pool.acquire() as conn:
@@ -123,7 +124,7 @@ class PrecedentStore:
             return []
 
         try:
-            embedding = self._embedder.generate_embedding(query_text)
+            embedding = await asyncio.to_thread(self._embedder.generate_embedding, query_text)
             embedding_list = embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
 
             domain_filter = "AND domain = :dom" if domain else ""

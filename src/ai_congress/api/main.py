@@ -2,7 +2,7 @@
 FastAPI Main Application
 Enhanced with comprehensive logging and verbosity
 """
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -51,21 +51,21 @@ config = load_config()
 async def log_requests(request: Request, call_next):
     """Log all HTTP requests with timing and details"""
     start_time = time.time()
-    
+
     # Log request
     logger.info(f"→ {request.method} {request.url.path}")
     logger.debug(f"  Headers: {dict(request.headers)}")
     logger.debug(f"  Query params: {dict(request.query_params)}")
-    
+
     try:
         response = await call_next(request)
-        
+
         # Calculate duration
         duration = time.time() - start_time
-        
+
         # Log response
         logger.info(f"← {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.3f}s")
-        
+
         return response
     except Exception as e:
         duration = time.time() - start_time
@@ -223,7 +223,7 @@ async def startup_event():
     logger.info("=" * 80)
     logger.info("🚀 Starting AI Congress API")
     logger.info("=" * 80)
-    
+
     # List available models
     logger.info("📋 Discovering Ollama models...")
     models = await model_registry.list_available_models()
@@ -232,12 +232,12 @@ async def startup_event():
         logger.info(f"     - {model['name']}")
     if len(models) > 5:
         logger.info(f"     ... and {len(models) - 5} more")
-    
+
     # Load benchmark weights
     logger.info("📊 Loading model benchmark weights...")
     await model_registry.load_benchmark_weights("config/models_benchmark.json")
     logger.info("   ✓ Weights loaded")
-    
+
     # Log configuration summary
     logger.info("")
     logger.info("⚙️  Configuration Summary:")
@@ -247,7 +247,7 @@ async def startup_event():
     logger.info(f"   • Web Search Engine: {config.web_search.default_engine}")
     logger.info(f"   • Advanced Extractors: {config.document_extraction.use_advanced_extractors}")
     logger.info(f"   • Max Concurrent Requests: {config.swarm.max_concurrent_requests}")
-    
+
     # Initialize data lake (Oracle 26ai Free)
     logger.info("")
     logger.info("🗄️  Initializing Data Lake (Oracle 26ai Free)...")
@@ -326,7 +326,7 @@ async def chat(request: ChatRequest):
         augmented_prompt = request.prompt
         context_sources = []
         web_search_results = []
-        
+
         # Add web search context if requested
         if request.search_web:
             if web_search_engine is None:
@@ -337,23 +337,23 @@ async def chat(request: ChatRequest):
                     searxng_url=config.web_search.searxng_url if config.web_search.searxng_url else None,
                     yacy_url=config.web_search.yacy_url if config.web_search.yacy_url else None
                 )
-            
+
             logger.info("Performing web search for context...")
             search_results = await web_search_engine.search(request.prompt)
-            
+
             if search_results:
                 web_search_results = search_results  # Store for response
                 web_context = web_search_engine.format_results_for_context(search_results)
                 augmented_prompt = web_context + "\n\nUser Question: " + request.prompt
                 context_sources.append({"type": "web_search", "count": len(search_results)})
-        
+
         # Add RAG context if requested or if documents are specified
         if request.use_rag or request.document_ids:
             if rag_engine is None:
                 rag_engine = get_rag_engine()
-            
+
             logger.info("Retrieving RAG context...")
-            
+
             # If specific documents, search within them
             if request.document_ids:
                 all_chunks = []
@@ -368,14 +368,14 @@ async def chat(request: ChatRequest):
             else:
                 # Search across all documents
                 rag_chunks = await rag_engine.retrieve_context(augmented_prompt)
-            
+
             if rag_chunks:
                 # Format RAG context
                 rag_context = "\n\nRelevant Context from Documents:\n\n"
                 for i, chunk in enumerate(rag_chunks, 1):
                     rag_context += f"[{i}] {chunk['content']}\n"
                     rag_context += f"   (Source: {chunk['document_id']}, Similarity: {chunk['similarity']:.2f})\n\n"
-                
+
                 augmented_prompt = rag_context + "\n\nUser Question: " + request.prompt
                 context_sources.append({"type": "rag", "count": len(rag_chunks)})
 
@@ -839,7 +839,7 @@ async def health_check():
 async def transcribe_audio(file: UploadFile = File(...)):
     """Transcribe audio file to text"""
     global voice_transcriber
-    
+
     try:
         if voice_transcriber is None:
             voice_transcriber = get_voice_transcriber(
@@ -848,19 +848,19 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 compute_type=config.voice.compute_type,
                 language=config.voice.language
             )
-        
+
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-        
+
         # Transcribe
         result = voice_transcriber.transcribe_file(tmp_path)
-        
+
         # Clean up
         os.unlink(tmp_path)
-        
+
         event_logger.log("audio_transcribe", language=result.get('language', ''))
         return {
             "success": True,
@@ -915,14 +915,14 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
 async def list_documents():
     """List all uploaded documents"""
     global rag_engine
-    
+
     try:
         if rag_engine is None:
             rag_engine = get_rag_engine()
-        
+
         documents = await rag_engine.list_documents()
         return {"documents": documents}
-        
+
     except Exception as e:
         logger.error(f"List documents error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -932,18 +932,18 @@ async def list_documents():
 async def delete_document(document_id: str):
     """Delete a document from vector store"""
     global rag_engine
-    
+
     try:
         if rag_engine is None:
             rag_engine = get_rag_engine()
-        
+
         success = await rag_engine.delete_document(document_id)
-        
+
         if success:
             return {"success": True, "message": f"Document {document_id} deleted"}
         else:
             raise HTTPException(status_code=404, detail="Document not found")
-            
+
     except Exception as e:
         logger.error(f"Delete document error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -960,7 +960,7 @@ class WebSearchRequest(BaseModel):
 async def search_web(request: WebSearchRequest):
     """Search the web"""
     global web_search_engine
-    
+
     try:
         if web_search_engine is None:
             web_search_engine = get_web_search_engine(
@@ -970,7 +970,7 @@ async def search_web(request: WebSearchRequest):
                 searxng_url=config.web_search.searxng_url if config.web_search.searxng_url else None,
                 yacy_url=config.web_search.yacy_url if config.web_search.yacy_url else None
             )
-        
+
         if request.search_type == "news":
             results = await web_search_engine.search_news(
                 request.query,
@@ -981,9 +981,9 @@ async def search_web(request: WebSearchRequest):
                 request.query,
                 max_results=request.max_results
             )
-        
+
         return {"success": True, "results": results, "query": request.query}
-        
+
     except Exception as e:
         logger.error(f"Web search error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -999,18 +999,18 @@ class BrowseRequest(BaseModel):
 async def browse_url(request: BrowseRequest):
     """Fetch and parse URL content"""
     global web_browser
-    
+
     try:
         if web_browser is None:
             web_browser = get_web_browser(timeout=config.web_search.timeout)
-        
+
         result = await web_browser.fetch_url(
             request.url,
             extract_clean_text=request.extract_clean_text
         )
-        
+
         return result
-        
+
     except Exception as e:
         logger.error(f"Browse error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1030,7 +1030,7 @@ class ImageGenRequest(BaseModel):
 async def generate_image(request: ImageGenRequest):
     """Generate image from text prompt"""
     global image_generator
-    
+
     try:
         if image_generator is None:
             image_generator = get_image_generator(
@@ -1038,7 +1038,7 @@ async def generate_image(request: ImageGenRequest):
                 output_dir=config.image_gen.output_dir,
                 device=config.image_gen.device
             )
-        
+
         result = await image_generator.generate_image(
             prompt=request.prompt,
             negative_prompt=request.negative_prompt,
@@ -1067,8 +1067,8 @@ class PrecedentSearchRequest(BaseModel):
 
 @app.get("/api/precedents")
 async def list_precedents(
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     domain: Optional[str] = None,
 ):
     """List stored precedent rulings."""
