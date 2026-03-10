@@ -661,6 +661,7 @@ class EnhancedOrchestrator:
 
         if not initial_responses:
             run.fail("No successful initial responses")
+            await self.concurrency_governor.stop()
             profiler.end_stage("total_pipeline")
             return self._build_result(
                 run, [], {}, role_summary,
@@ -797,6 +798,27 @@ class EnhancedOrchestrator:
                         pass
 
             revised_responses = new_revised
+
+            # Optional sub-query revision between debate rounds
+            if (
+                run.sub_queries
+                and self.task_reviser
+                and self.task_reviser.revisions_remaining(run) > 0
+                and round_idx < debate_rounds - 1  # not after last round
+            ):
+                try:
+                    signal = await self.task_reviser.assess(run, revised_responses)
+                    if signal.should_revise:
+                        planner_model = planners[0] if planners else available_models[0]
+                        revised_sq = await self.task_reviser.revise(run, signal, planner_model)
+                        run.sub_queries = revised_sq
+                        run.log_event(
+                            "SUB_QUERY_REVISED",
+                            planner_model,
+                            f"mid-debate revision at round {round_idx + 1}",
+                        )
+                except Exception as e:
+                    logger.warning("Mid-debate revision failed: %s", e)
 
             # Update anchored responses for next round
             anchored = anchor_responses(
