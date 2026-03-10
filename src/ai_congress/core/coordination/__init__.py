@@ -5,6 +5,7 @@ from .circuit_breaker import CircuitBreaker
 from .graceful_degradation import GracefulDegradation
 from .adaptive_timeout import AdaptiveTimeout
 from .concurrency_governor import ConcurrencyGovernor
+from .task_reviser import TaskReviser, RevisionSignal
 
 __all__ = [
     "CoalitionFormation",
@@ -12,4 +13,6 @@ __all__ = [
     "GracefulDegradation",
     "AdaptiveTimeout",
     "ConcurrencyGovernor",
+    "TaskReviser",
+    "RevisionSignal",
 ]
