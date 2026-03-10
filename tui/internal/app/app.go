@@ -102,6 +102,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case SwitchScreenMsg:
+		// Block chat/dashboard transitions in read-only mode (SSH)
+		if a.readOnly && (msg.Screen == ScreenChat || msg.Screen == ScreenDashboard) {
+			return a, nil
+		}
 		return a.switchScreen(msg)
 
 	case WSEventMsg:
@@ -185,7 +189,7 @@ func (a App) switchScreen(msg SwitchScreenMsg) (tea.Model, tea.Cmd) {
 
 	case ScreenChat:
 		selectedModels, _ := msg.Data.([]string)
-		a.chat = NewChatModel(a.client, selectedModels)
+		a.chat = NewChatModel(selectedModels)
 		return a, a.chat.Init()
 
 	case ScreenDashboard:
@@ -206,14 +210,16 @@ func (a App) switchScreen(msg SwitchScreenMsg) (tea.Model, tea.Cmd) {
 					return
 				}
 				// Send the chat request
-				wsClient.SendChat(api.WSChatRequest{
+				if err := wsClient.SendChat(api.WSChatRequest{
 					Prompt:      chatData.Prompt,
 					Models:      chatData.Models,
 					Mode:        chatData.Mode,
 					Stream:      true,
 					Temperature: chatData.Temperature,
 					VotingMode:  chatData.VotingMode,
-				})
+				}); err != nil {
+					prog.Send(WSEventMsg{Event: api.WSMessage{Type: "error", Message: "SendChat: " + err.Error()}})
+				}
 			}()
 		}
 

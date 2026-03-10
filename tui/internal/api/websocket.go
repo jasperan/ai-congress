@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"strings"
 	"sync"
@@ -60,7 +61,7 @@ func (ws *WSClient) SendChat(req WSChatRequest) error {
 	defer ws.mu.Unlock()
 
 	if ws.conn == nil {
-		return nil
+		return errors.New("websocket not connected")
 	}
 
 	data, err := json.Marshal(req)

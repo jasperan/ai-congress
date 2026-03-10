@@ -33,10 +33,10 @@ type ChatModel struct {
 	err         error
 }
 
-var swarmModes = []string{"multi_model", "multi_request", "hybrid", "personality"}
+var swarmModes = []string{"multi_model", "multi_request", "hybrid", "personality", "streaming"}
 var votingModes = []string{"classic", "semantic"}
 
-func NewChatModel(client interface{}, selectedModels []string) ChatModel {
+func NewChatModel(selectedModels []string) ChatModel {
 	prompt := textinput.New()
 	prompt.Placeholder = "Ask anything..."
 	prompt.CharLimit = 500
