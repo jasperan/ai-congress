@@ -24,7 +24,7 @@ DDL_STATEMENTS = [
     CREATE TABLE CONGRESS_SESSIONS (
         session_id   VARCHAR2(36) PRIMARY KEY,
         prompt       CLOB,
-        mode         VARCHAR2(50),
+        swarm_mode   VARCHAR2(50),
         voting_mode  VARCHAR2(20),
         model_count  NUMBER(5),
         models_used  CLOB,
@@ -85,6 +85,23 @@ DDL_STATEMENTS = [
         created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """,
+    # Precedent rulings (stare decisis)
+    """
+    CREATE TABLE CONGRESS_PRECEDENTS (
+        id              VARCHAR2(36) PRIMARY KEY,
+        session_id      VARCHAR2(36) NOT NULL,
+        query_text      CLOB NOT NULL,
+        ruling_text     CLOB NOT NULL,
+        domain          VARCHAR2(50),
+        consensus       NUMBER(5,3) NOT NULL,
+        models_used     CLOB,
+        vote_data       CLOB,
+        debate_rounds   NUMBER(3) DEFAULT 0,
+        superseded_by   VARCHAR2(36),
+        embedding       VECTOR(384, FLOAT32),
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
 ]
 
 INDEX_STATEMENTS = [
@@ -96,6 +113,18 @@ INDEX_STATEMENTS = [
     "CREATE INDEX idx_votes_session ON CONGRESS_VOTES(session_id)",
     "CREATE INDEX idx_debates_session ON CONGRESS_DEBATES(session_id)",
     "CREATE INDEX idx_sessions_created ON CONGRESS_SESSIONS(created_at)",
+    "CREATE INDEX idx_precedents_domain ON CONGRESS_PRECEDENTS(domain)",
+    "CREATE INDEX idx_precedents_superseded ON CONGRESS_PRECEDENTS(superseded_by)",
+    "CREATE INDEX idx_precedents_session ON CONGRESS_PRECEDENTS(session_id)",
+]
+
+VECTOR_INDEX_STATEMENTS = [
+    """
+    CREATE VECTOR INDEX idx_precedents_vec
+        ON CONGRESS_PRECEDENTS(embedding)
+        ORGANIZATION NEIGHBOR PARTITIONS
+        WITH DISTANCE COSINE
+    """,
 ]
 
 
@@ -137,6 +166,15 @@ async def init_schema(pool_manager: OraclePoolManager) -> bool:
                     if "ORA-00955" in str(e) or "ORA-01408" in str(e):
                         continue
                     logger.warning(f"Index creation warning: {e}")
+
+            # Create vector indexes (ignore if already exist)
+            for vidx_sql in VECTOR_INDEX_STATEMENTS:
+                try:
+                    await cursor.execute(vidx_sql)
+                except Exception as e:
+                    if "ORA-00955" in str(e) or "ORA-01408" in str(e):
+                        continue
+                    logger.warning(f"Vector index creation warning: {e}")
 
             # Upsert schema version
             await cursor.execute(
