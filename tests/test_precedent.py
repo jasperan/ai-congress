@@ -130,3 +130,136 @@ class TestPrecedentStore:
         mock_cursor.execute.assert_called_once()
         call_args = mock_cursor.execute.call_args
         assert "superseded_by" in call_args[0][0]
+
+
+class TestPrecedentInjector:
+    """Test PrecedentInjector logic without LLM calls."""
+
+    def test_import(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        assert PrecedentInjector is not None
+
+    def test_no_precedent_action(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        injector = PrecedentInjector()
+        action = injector.classify_action([])
+        assert action == PrecedentAction.NO_PRECEDENT
+
+    def test_soft_cite_action(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        from src.ai_congress.core.precedent.precedent_store import Precedent
+
+        p = Precedent(
+            id="p1", session_id="s1", query_text="q", ruling_text="r",
+            domain="general", consensus=0.80, models_used=["m1"],
+            similarity=0.82,
+        )
+        injector = PrecedentInjector()
+        action = injector.classify_action([p])
+        assert action == PrecedentAction.SOFT_CITE
+
+    def test_fast_follow_action(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        from src.ai_congress.core.precedent.precedent_store import Precedent
+
+        p = Precedent(
+            id="p1", session_id="s1", query_text="q", ruling_text="r",
+            domain="math", consensus=0.95, models_used=["m1"],
+            similarity=0.96,
+        )
+        injector = PrecedentInjector()
+        action = injector.classify_action([p])
+        assert action == PrecedentAction.FAST_FOLLOW
+
+    def test_below_threshold_no_precedent(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        from src.ai_congress.core.precedent.precedent_store import Precedent
+
+        p = Precedent(
+            id="p1", session_id="s1", query_text="q", ruling_text="r",
+            domain="general", consensus=0.90, models_used=["m1"],
+            similarity=0.60,
+        )
+        injector = PrecedentInjector()
+        action = injector.classify_action([p])
+        assert action == PrecedentAction.NO_PRECEDENT
+
+    def test_augment_system_prompt_soft_cite(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        from src.ai_congress.core.precedent.precedent_store import Precedent
+
+        p = Precedent(
+            id="p1", session_id="s1",
+            query_text="What is gravity?",
+            ruling_text="Gravity is a fundamental force.",
+            domain="science", consensus=0.87, models_used=["m1"],
+            similarity=0.85,
+        )
+        injector = PrecedentInjector()
+        result = injector.augment_system_prompt(
+            "You are a helpful assistant.", [p], PrecedentAction.SOFT_CITE,
+        )
+        assert "PRIOR CONGRESS RULING" in result
+        assert "FOLLOW" in result
+        assert "DISTINGUISH" in result
+        assert "Gravity is a fundamental force" in result
+
+    def test_augment_does_nothing_for_no_precedent(self):
+        from src.ai_congress.core.precedent.precedent_injector import (
+            PrecedentInjector, PrecedentAction,
+        )
+        injector = PrecedentInjector()
+        base = "You are a helpful assistant."
+        result = injector.augment_system_prompt(base, [], PrecedentAction.NO_PRECEDENT)
+        assert result == base
+
+    def test_detect_distinguish_true(self):
+        from src.ai_congress.core.precedent.precedent_injector import PrecedentInjector
+        injector = PrecedentInjector()
+        text = "I DISTINGUISH from the prior ruling because the question context differs significantly."
+        assert injector.detect_distinguish(text) is True
+
+    def test_detect_distinguish_overrule(self):
+        from src.ai_congress.core.precedent.precedent_injector import PrecedentInjector
+        injector = PrecedentInjector()
+        text = "I believe we should overrule the previous decision."
+        assert injector.detect_distinguish(text) is True
+
+    def test_detect_distinguish_false(self):
+        from src.ai_congress.core.precedent.precedent_injector import PrecedentInjector
+        injector = PrecedentInjector()
+        text = "I agree with this assessment. The answer is indeed 42."
+        assert injector.detect_distinguish(text) is False
+
+    def test_detect_follow_is_not_distinguish(self):
+        from src.ai_congress.core.precedent.precedent_injector import PrecedentInjector
+        injector = PrecedentInjector()
+        text = "I FOLLOW the prior ruling. The answer remains consistent."
+        assert injector.detect_distinguish(text) is False
+
+    def test_build_fast_follow_response(self):
+        from src.ai_congress.core.precedent.precedent_injector import PrecedentInjector
+        from src.ai_congress.core.precedent.precedent_store import Precedent
+
+        p = Precedent(
+            id="p1", session_id="s1", query_text="q", ruling_text="The answer is 4.",
+            domain="math", consensus=0.95, models_used=["m1"], similarity=0.96,
+        )
+        injector = PrecedentInjector()
+        resp = injector.build_fast_follow_response(p)
+        assert resp["final_answer"] == "The answer is 4."
+        assert resp["confidence"] == 0.95
+        assert resp["precedent"]["action"] == "fast_follow"
+        assert resp["precedent"]["disposition"] == "followed"
