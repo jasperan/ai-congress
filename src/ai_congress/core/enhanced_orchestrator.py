@@ -53,6 +53,8 @@ from .coordination.circuit_breaker import CircuitBreaker
 from .coordination.graceful_degradation import GracefulDegradation
 from .coordination.adaptive_timeout import AdaptiveTimeout
 from .coordination.coalition_formation import CoalitionFormation
+from .coordination.concurrency_governor import ConcurrencyGovernor
+from .coordination.task_reviser import TaskReviser
 
 # New module imports - learning
 from .learning.dynamic_weights import DynamicWeightManager
@@ -147,6 +149,12 @@ class EnhancedOrchestrator:
             stall_timeout=60.0,
             backoff_base=0.5,
         )
+
+        # GPU-aware concurrency control
+        self.concurrency_governor = ConcurrencyGovernor()
+
+        # Mid-debate sub-query revision
+        self.task_reviser = TaskReviser(ollama_client=ollama_client)
 
         # State
         self._runs: dict[str, ImplementationRun] = {}
@@ -315,6 +323,15 @@ class EnhancedOrchestrator:
                 "error": str(e),
                 "latency_ms": latency_ms,
             }
+
+    async def _throttled_query(self, model, prompt, temperature, **kwargs):
+        """Wrap _query_model with GPU-aware concurrency throttling."""
+        async with self.concurrency_governor.throttled() as stats:
+            logger.debug(
+                "GPU throttle: model=%s limit=%d vram=%.0f%%",
+                model, stats["current_limit"], stats["vram_usage_pct"],
+            )
+            return await self._query_model(model, prompt, temperature, **kwargs)
 
     async def enhanced_swarm(
         self,
@@ -540,6 +557,9 @@ class EnhancedOrchestrator:
             )
         profiler.end_stage("query_decomposition")
 
+        # Start GPU-aware concurrency control
+        await self.concurrency_governor.start()
+
         # === (k) Supervised parallel queries (Wave 1) with role-differentiated prompts ===
         profiler.start_stage("wave_1_queries")
         run.log_event("WAVE_1_START", detail="Initial parallel queries with role prompts")
@@ -570,7 +590,7 @@ class EnhancedOrchestrator:
             supervised_tasks.append(
                 SupervisedTask(
                     agent_id=model,
-                    coro_factory=self._query_model,
+                    coro_factory=self._throttled_query,
                     args=(model, effective_prompt, temperature),
                     kwargs={"system_prompt": role_system_prompt, "timeout": model_timeout},
                     restart_policy=RestartPolicy.RESTART,
@@ -608,6 +628,36 @@ class EnhancedOrchestrator:
                     pass
 
         profiler.end_stage("wave_1_queries")
+
+        # === Sub-query revision check after Wave 1 ===
+        if run.sub_queries and self.task_reviser.revisions_remaining(run) > 0:
+            try:
+                signal = await self.task_reviser.assess(run, initial_responses)
+                if signal.should_revise:
+                    planner_model = planners[0] if planners else available_models[0]
+                    run.log_event(
+                        "SUB_QUERY_REVISION_TRIGGERED",
+                        planner_model,
+                        signal.reason,
+                    )
+                    revised_sq = await self.task_reviser.revise(run, signal, planner_model)
+                    run.sub_queries = revised_sq
+                    sub_q_text = "\n".join(f"- {sq['text']}" for sq in revised_sq)
+                    effective_prompt = (
+                        f"{prompt}\n\nAddress these refined sub-questions:\n{sub_q_text}"
+                    )
+                    run.log_event(
+                        "SUB_QUERY_REVISED",
+                        planner_model,
+                        f"revised={len(revised_sq)} sub-queries",
+                    )
+                else:
+                    run.log_event(
+                        "SUB_QUERY_REVISION_SKIPPED",
+                        detail=f"scores: div={signal.divergence_score:.2f} cov={signal.coverage_score:.2f} conf={signal.avg_confidence:.2f}",
+                    )
+            except Exception as e:
+                logger.warning("Sub-query revision failed: %s", e)
 
         if not initial_responses:
             run.fail("No successful initial responses")
@@ -709,7 +759,7 @@ class EnhancedOrchestrator:
             critique_tasks = [
                 SupervisedTask(
                     agent_id=f"{model}_critique_r{round_idx}",
-                    coro_factory=self._query_model,
+                    coro_factory=self._throttled_query,
                     args=(model, critique_prompt, round_temp),
                     kwargs={
                         "system_prompt": critic_system_prompt,
@@ -755,6 +805,9 @@ class EnhancedOrchestrator:
             )
 
         profiler.end_stage("wave_2_debate")
+
+        # Stop GPU monitoring
+        await self.concurrency_governor.stop()
 
         # === (o) Compute conviction scores ===
         profiler.start_stage("conviction_and_voting")
