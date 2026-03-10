@@ -285,3 +285,40 @@ class TestOrchestratorIntegration:
         import inspect
         src = inspect.getsource(EnhancedOrchestrator._build_result)
         assert "precedent" in src
+
+
+class TestAPIIntegration:
+    """Test that API wires up precedent store."""
+
+    def test_api_imports_precedent(self):
+        import inspect
+        from src.ai_congress.api import main as api_main
+        source = inspect.getsource(api_main)
+        assert "precedent" in source.lower()
+
+
+class TestPrecedentEndpoints:
+    """Test that precedent API endpoints are defined."""
+
+    def test_precedent_list_route_exists(self):
+        from src.ai_congress.api.main import app
+        routes = [r.path for r in app.routes]
+        assert "/api/precedents" in routes
+
+    def test_precedent_search_route_exists(self):
+        from src.ai_congress.api.main import app
+        routes = [r.path for r in app.routes]
+        assert "/api/precedents/search" in routes
+
+    def test_precedent_detail_route_exists(self):
+        from src.ai_congress.api.main import app
+        routes = [r.path for r in app.routes]
+        assert any("/api/precedents/{" in r for r in routes)
+
+
+class TestPrecedentLogging:
+    """Test precedent event logging integration."""
+
+    def test_logger_has_log_precedent_cited(self):
+        from src.ai_congress.datalake.logger import EventLogger
+        assert hasattr(EventLogger, "log_precedent_cited")

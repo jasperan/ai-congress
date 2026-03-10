@@ -106,13 +106,13 @@ class EventLogger:
                 await cursor.execute(
                     """
                     INSERT INTO CONGRESS_SESSIONS
-                        (session_id, prompt, mode, voting_mode, model_count, models_used)
-                    VALUES (:sid, :prompt, :mode, :vm, :mc, :models)
+                        (session_id, prompt, swarm_mode, voting_mode, model_count, models_used)
+                    VALUES (:sid, :prompt, :smode, :vm, :mc, :models)
                     """,
                     {
                         "sid": session_id,
                         "prompt": prompt,
-                        "mode": mode,
+                        "smode": mode,
                         "vm": voting_mode,
                         "mc": len(models),
                         "models": json.dumps(models),
@@ -233,6 +233,43 @@ class EventLogger:
                 await conn.commit()
         except Exception as e:
             logger.warning("Failed to log debate round: %s", e)
+
+    async def log_precedent_cited(
+        self,
+        session_id: str,
+        precedent_id: str,
+        action: str,
+        similarity: float,
+        disposition: str = "",
+    ) -> None:
+        """Log a precedent citation event."""
+        if not self._pool.is_available:
+            return
+        try:
+            async with self._pool.pool.acquire() as conn:
+                cursor = conn.cursor()
+                await cursor.execute(
+                    """
+                    INSERT INTO CONGRESS_EVENTS
+                        (id, session_id, event_type, sequence_num, event_data)
+                    VALUES (:id, :sid, :et, :seq, :ed)
+                    """,
+                    {
+                        "id": str(uuid.uuid4()),
+                        "sid": session_id,
+                        "et": "PRECEDENT_CITED",
+                        "seq": self._next_seq(session_id),
+                        "ed": json.dumps({
+                            "precedent_id": precedent_id,
+                            "action": action,
+                            "similarity": similarity,
+                            "disposition": disposition,
+                        }),
+                    },
+                )
+                await conn.commit()
+        except Exception as e:
+            logger.warning("Failed to log precedent citation: %s", e)
 
     async def _flush_loop(self) -> None:
         """Background loop that periodically flushes queued events."""

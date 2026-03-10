@@ -24,12 +24,16 @@ from ..integrations.voice import get_voice_transcriber
 from ..integrations.web_search import get_web_search_engine
 from ..integrations.web_browser import get_web_browser
 from ..integrations.image_gen import get_image_generator
+from ..core.enhanced_orchestrator import EnhancedOrchestrator
+from ..core.personality.profile import ModelPersonalityLoader
 from ..utils.config_loader import load_config
 from ..utils.logger import info_message, error_message, truncate_text
 from ..datalake.connection import OraclePoolManager
 from ..datalake.schema import init_schema
 from ..datalake.logger import EventLogger
 from ..datalake.middleware import DataLakeMiddleware
+from ..integrations.embeddings import get_embedding_generator
+from ..core.precedent.precedent_store import PrecedentStore
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +90,33 @@ model_registry = ModelRegistry(config.ollama)
 voting_engine = VotingEngine()
 swarm = SwarmOrchestrator(model_registry, voting_engine, config.ollama)
 
+# Enhanced orchestrator (lazy init)
+enhanced_orchestrator = None
+
+def get_enhanced_orchestrator():
+    global enhanced_orchestrator
+    if enhanced_orchestrator is None:
+        personality_config = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "config", "models_personality.json"
+        )
+        personality_loader = ModelPersonalityLoader(personality_config)
+        enhanced_orchestrator = EnhancedOrchestrator(
+            model_registry=model_registry,
+            voting_engine=voting_engine,
+            ollama_client=swarm.ollama_client,
+            personality_loader=personality_loader,
+        )
+
+        # Wire precedent store if Oracle is available
+        if oracle_pool.is_available:
+            try:
+                embedder = get_embedding_generator()
+                enhanced_orchestrator.precedent_store = PrecedentStore(oracle_pool, embedder)
+                logger.info("Precedent store initialized (stare decisis enabled)")
+            except Exception as e:
+                logger.warning("Precedent store init failed (stare decisis disabled): %s", e)
+    return enhanced_orchestrator
+
 # Initialize new components (lazy loading)
 rag_engine = None
 voice_transcriber = None
@@ -93,8 +124,16 @@ web_search_engine = None
 web_browser = None
 image_generator = None
 
-# Data lake (Oracle 26ai Free)
-oracle_pool = OraclePoolManager()
+# Data lake (Oracle 26ai Free) — config-driven
+oracle_pool = OraclePoolManager(
+    host=config.datalake.host,
+    port=config.datalake.port,
+    service=config.datalake.service,
+    user=config.datalake.user,
+    password=config.datalake.password,
+    pool_min=config.datalake.pool_min,
+    pool_max=config.datalake.pool_max,
+)
 event_logger = EventLogger(oracle_pool)
 app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
 
@@ -128,6 +167,23 @@ class ChatRequest(BaseModel):
     search_web: bool = False  # Enable web search
     document_ids: Optional[List[str]] = None  # Specific documents for RAG
     voting_mode: str = "classic"  # classic | semantic
+
+
+class EnhancedChatRequest(BaseModel):
+    prompt: str
+    models: List[str]
+    temperature: float = 0.7
+    enable_decomposition: bool = True
+    enable_debate: bool = True
+    use_rag: bool = False
+    document_ids: Optional[List[str]] = None
+    search_web: bool = False
+
+class FeedbackRequest(BaseModel):
+    session_id: str
+    model: str
+    feedback: str  # "positive" or "negative"
+    response_text: Optional[str] = None
 
 
 class ModelInfo(BaseModel):
@@ -662,6 +718,115 @@ async def get_personality_list(list_name: str):
     return personalities
 
 
+@app.post("/api/chat/enhanced")
+async def enhanced_chat(request: EnhancedChatRequest):
+    """Process chat through the Enhanced Orchestrator with all 35 AI improvements."""
+    dl_session = event_logger.new_session()
+    chat_start = time.time()
+
+    try:
+        orch = get_enhanced_orchestrator()
+
+        # Wire RAG engine if requested
+        if request.use_rag or request.document_ids:
+            global rag_engine
+            if rag_engine is None:
+                rag_engine = get_rag_engine()
+            orch.rag_engine = rag_engine
+
+        # Wire web search if requested
+        if request.search_web:
+            global web_search_engine
+            if web_search_engine is None:
+                web_search_engine = get_web_search_engine(
+                    max_results=config.web_search.max_results,
+                    timeout=config.web_search.timeout,
+                    default_engine=config.web_search.default_engine,
+                )
+            orch.web_search_engine = web_search_engine
+
+        result = await orch.enhanced_swarm(
+            prompt=request.prompt,
+            models=request.models,
+            temperature=request.temperature,
+            enable_decomposition=request.enable_decomposition,
+            enable_debate=request.enable_debate,
+        )
+
+        # Log to data lake
+        await event_logger.log_session(
+            dl_session, request.prompt, "enhanced",
+            "ensemble", request.models,
+        )
+        latency_ms = int((time.time() - chat_start) * 1000)
+        event_logger.log("enhanced_chat_response", dl_session,
+            latency_ms=latency_ms,
+            confidence=result.get("confidence", 0),
+            run_id=result.get("run_id", ""),
+        )
+
+        # Log precedent citation if applicable
+        precedent = result.get("precedent")
+        if precedent and precedent.get("cited"):
+            await event_logger.log_precedent_cited(
+                dl_session,
+                precedent["cited"].get("id", ""),
+                precedent.get("action", ""),
+                precedent["cited"].get("similarity", 0),
+                precedent.get("disposition", ""),
+            )
+
+        return result
+    except Exception as e:
+        logger.error(f"Enhanced chat error: {e}")
+        event_logger.log("enhanced_chat_error", dl_session, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """Submit user feedback on a model response."""
+    try:
+        orch = get_enhanced_orchestrator()
+        orch.record_feedback(request.session_id, request.model, request.feedback)
+        event_logger.log("user_feedback",
+            session_id=request.session_id,
+            model=request.model,
+            feedback=request.feedback,
+        )
+        return {"success": True, "message": "Feedback recorded"}
+    except Exception as e:
+        logger.error(f"Feedback error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/enhanced/stats")
+async def enhanced_stats():
+    """Get Enhanced Orchestrator performance statistics."""
+    try:
+        orch = get_enhanced_orchestrator()
+        return orch.get_performance_stats()
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/enhanced/runs/{run_id}")
+async def get_run(run_id: str):
+    """Get details of a specific Enhanced Orchestrator run."""
+    try:
+        orch = get_enhanced_orchestrator()
+        run = orch.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return run.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get run error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
@@ -885,7 +1050,73 @@ async def generate_image(request: ImageGenRequest):
 
         event_logger.log("image_generate", prompt_length=len(request.prompt))
         return result
-        
+
     except Exception as e:
         logger.error(f"Image generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== PRECEDENT ENDPOINTS (Stare Decisis) ====================
+
+class PrecedentSearchRequest(BaseModel):
+    query: str
+    domain: Optional[str] = None
+    top_k: int = 5
+    min_similarity: float = 0.75
+
+
+@app.get("/api/precedents")
+async def list_precedents(
+    limit: int = 50,
+    offset: int = 0,
+    domain: Optional[str] = None,
+):
+    """List stored precedent rulings."""
+    try:
+        orch = get_enhanced_orchestrator()
+        if orch.precedent_store is None:
+            return {"precedents": [], "message": "Precedent store not available"}
+        precedents = await orch.precedent_store.list_precedents(
+            limit=limit, offset=offset, domain=domain,
+        )
+        return {"precedents": [p.to_dict() for p in precedents]}
+    except Exception as e:
+        logger.error(f"List precedents error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/precedents/search")
+async def search_precedents(request: PrecedentSearchRequest):
+    """Search for similar precedent rulings via vector similarity."""
+    try:
+        orch = get_enhanced_orchestrator()
+        if orch.precedent_store is None:
+            return {"precedents": [], "message": "Precedent store not available"}
+        precedents = await orch.precedent_store.search_precedents(
+            query_text=request.query,
+            domain=request.domain,
+            top_k=request.top_k,
+            min_similarity=request.min_similarity,
+        )
+        return {"precedents": [p.to_dict() for p in precedents], "query": request.query}
+    except Exception as e:
+        logger.error(f"Search precedents error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/precedents/{precedent_id}")
+async def get_precedent(precedent_id: str):
+    """Get a specific precedent by ID, including supersession chain."""
+    try:
+        orch = get_enhanced_orchestrator()
+        if orch.precedent_store is None:
+            raise HTTPException(status_code=503, detail="Precedent store not available")
+        precedent = await orch.precedent_store.get_precedent(precedent_id)
+        if precedent is None:
+            raise HTTPException(status_code=404, detail="Precedent not found")
+        return precedent.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get precedent error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
