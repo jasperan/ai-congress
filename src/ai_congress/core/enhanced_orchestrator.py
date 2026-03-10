@@ -74,6 +74,10 @@ from .acp.goal_alignment import Mission, GoalAlignmentEngine
 from .acp.org_chart import OrgChart
 from .acp.heartbeat import HeartbeatManager, HeartbeatConfig
 
+# Precedent-based reasoning (stare decisis)
+from .precedent.precedent_store import PrecedentStore
+from .precedent.precedent_injector import PrecedentInjector, PrecedentAction
+
 logger = logging.getLogger(__name__)
 
 # Map RoleDispatcher role values to AgentRole for goal alignment
@@ -216,6 +220,10 @@ class EnhancedOrchestrator:
         # Observability
         self.decision_explainer = DecisionExplainer()
         self.performance_profiler = PerformanceProfiler()
+
+        # Precedent-based reasoning (stare decisis) — requires pool + embedder
+        self.precedent_store: Optional[PrecedentStore] = None
+        self.precedent_injector = PrecedentInjector()
 
         # Paperclip-inspired systems
         self.audit_trail = AuditTrail()
@@ -389,6 +397,9 @@ class EnhancedOrchestrator:
         decision_explanation = ""
         performance_profile = {}
         coalition_info = []
+        precedent_info = None
+        precedent_action = PrecedentAction.NO_PRECEDENT
+        cited_precedents = []
 
         # === (c) Graceful degradation check ===
         try:
@@ -494,6 +505,35 @@ class EnhancedOrchestrator:
             query_domain = "general"
         profiler.end_stage("reasoning_routing")
 
+        # === Precedent lookup (stare decisis) ===
+        profiler.start_stage("precedent_lookup")
+        if self.precedent_store is not None:
+            try:
+                cited_precedents = await self.precedent_store.search_precedents(
+                    prompt, domain=query_domain,
+                )
+                precedent_action = self.precedent_injector.classify_action(cited_precedents)
+                run.log_event("PRECEDENT_LOOKUP", detail=f"found={len(cited_precedents)}, action={precedent_action.value}")
+
+                if precedent_action == PrecedentAction.FAST_FOLLOW:
+                    fast_result = self.precedent_injector.build_fast_follow_response(cited_precedents[0])
+                    run.log_event("PRECEDENT_FAST_FOLLOW", detail=f"id={cited_precedents[0].id}")
+                    run.complete({})
+                    profiler.end_stage("precedent_lookup")
+                    profiler.end_stage("total_pipeline")
+                    fast_result["run_id"] = run.run_id
+                    fast_result["query"] = run.query
+                    fast_result["reasoning_mode"] = reasoning_mode
+                    fast_result["event_log"] = run.event_log
+                    fast_result["duration_seconds"] = run.duration_seconds
+                    return fast_result
+
+            except Exception as e:
+                logger.warning("Precedent lookup failed: %s", e)
+                precedent_action = PrecedentAction.NO_PRECEDENT
+                cited_precedents = []
+        profiler.end_stage("precedent_lookup")
+
         # === (h) Optional: RAG augmentation ===
         profiler.start_stage("rag_augmentation")
         effective_prompt = prompt
@@ -583,6 +623,12 @@ class EnhancedOrchestrator:
                 objective = self.goal_engine.create_agent_objective(model, agent_role)
                 alignment_prompt = self.goal_engine.build_alignment_prompt(objective)
                 role_system_prompt = f"{role_system_prompt}\n\n{alignment_prompt}"
+
+            # Inject precedent context if applicable
+            if precedent_action == PrecedentAction.SOFT_CITE and cited_precedents:
+                role_system_prompt = self.precedent_injector.augment_system_prompt(
+                    role_system_prompt, cited_precedents, precedent_action,
+                )
 
             # Get adaptive timeout for this model
             model_timeout = self.adaptive_timeout.get_timeout(model)
@@ -1051,6 +1097,56 @@ class EnhancedOrchestrator:
 
         profiler.end_stage("learning_updates")
 
+        # === Store new precedent ===
+        new_precedent_id = ""
+        if self.precedent_store is not None and winner:
+            try:
+                new_precedent_id = await self.precedent_store.store_precedent(
+                    session_id=run.run_id,
+                    query_text=prompt,
+                    ruling_text=winner,
+                    domain=query_domain,
+                    consensus=confidence,
+                    models_used=final_models,
+                    vote_data=vote_details if isinstance(vote_details, dict) else {},
+                    debate_rounds=debate_rounds,
+                )
+                if new_precedent_id:
+                    run.log_event("PRECEDENT_STORED", detail=f"id={new_precedent_id}")
+            except Exception as e:
+                logger.warning("Precedent storage failed: %s", e)
+
+        # === Hook 3: Supersession check ===
+        if (
+            precedent_action == PrecedentAction.SOFT_CITE
+            and cited_precedents
+            and new_precedent_id
+            and self.precedent_store is not None
+        ):
+            try:
+                distinguish_count = sum(
+                    1 for r in revised_responses
+                    if r.get("success", True) and self.precedent_injector.detect_distinguish(r.get("response", ""))
+                )
+                if distinguish_count > len(revised_responses) / 2:
+                    await self.precedent_store.supersede(cited_precedents[0].id, new_precedent_id)
+                    run.log_event("PRECEDENT_SUPERSEDED", detail=f"{cited_precedents[0].id} -> {new_precedent_id}")
+                    precedent_info = {
+                        "action": precedent_action.value,
+                        "cited": cited_precedents[0].to_dict(),
+                        "disposition": "distinguished",
+                        "superseded": True,
+                    }
+                else:
+                    precedent_info = {
+                        "action": precedent_action.value,
+                        "cited": cited_precedents[0].to_dict(),
+                        "disposition": "followed",
+                        "superseded": False,
+                    }
+            except Exception as e:
+                logger.warning("Precedent supersession check failed: %s", e)
+
         # === (x) End profiler, build result ===
         profiler.end_stage("total_pipeline")
         try:
@@ -1082,6 +1178,7 @@ class EnhancedOrchestrator:
             rag_context=rag_context,
             coalition_info=coalition_info,
             audit_events=len(self.audit_trail._events),
+            precedent_info=precedent_info,
         )
         run.final_result = result
         # Safety: ensure governor is stopped even on unexpected code paths
@@ -1113,6 +1210,7 @@ class EnhancedOrchestrator:
         rag_context: dict = None,
         coalition_info: list = None,
         audit_events: int = 0,
+        precedent_info: dict = None,
     ) -> dict:
         return {
             "run_id": run.run_id,
@@ -1146,6 +1244,8 @@ class EnhancedOrchestrator:
                 }
                 for c in (coalition_info or [])
             ],
+            # Precedent-based reasoning (stare decisis)
+            "precedent": precedent_info,
             # Paperclip-inspired fields
             "audit_event_count": audit_events,
             "mission_active": self.goal_engine is not None,

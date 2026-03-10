@@ -263,3 +263,25 @@ class TestPrecedentInjector:
         assert resp["confidence"] == 0.95
         assert resp["precedent"]["action"] == "fast_follow"
         assert resp["precedent"]["disposition"] == "followed"
+
+
+class TestOrchestratorIntegration:
+    """Test that EnhancedOrchestrator has precedent attributes."""
+
+    def test_orchestrator_has_precedent_store(self):
+        from src.ai_congress.core.enhanced_orchestrator import EnhancedOrchestrator
+        import inspect
+        init_src = inspect.getsource(EnhancedOrchestrator.__init__)
+        assert "precedent_store" in init_src
+
+    def test_orchestrator_has_precedent_injector(self):
+        from src.ai_congress.core.enhanced_orchestrator import EnhancedOrchestrator
+        import inspect
+        init_src = inspect.getsource(EnhancedOrchestrator.__init__)
+        assert "precedent_injector" in init_src
+
+    def test_build_result_has_precedent_field(self):
+        from src.ai_congress.core.enhanced_orchestrator import EnhancedOrchestrator
+        import inspect
+        src = inspect.getsource(EnhancedOrchestrator._build_result)
+        assert "precedent" in src
