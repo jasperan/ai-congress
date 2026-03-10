@@ -127,6 +127,10 @@ class ConcurrencyGovernor:
             except asyncio.CancelledError:
                 pass
             self._poll_task = None
+        # Wake any blocked waiters so they don't hang after shutdown
+        async with self._cond:
+            self._dynamic_limit = self.max_concurrent
+            self._cond.notify_all()
         logger.info("ConcurrencyGovernor stopped")
 
     async def acquire(self):
@@ -156,6 +160,16 @@ class ConcurrencyGovernor:
             yield self.get_stats()
         finally:
             await self.release()
+
+    async def __aenter__(self):
+        """Start governor as async context manager."""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Stop governor on context exit, ensuring cleanup on exceptions."""
+        await self.stop()
+        return False
 
     def get_stats(self) -> dict:
         """Return current GPU and concurrency stats."""

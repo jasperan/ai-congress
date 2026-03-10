@@ -134,3 +134,56 @@ class TestConcurrencyGovernor:
             await asyncio.sleep(0.1)
             await gov.stop()
             assert mock_poll.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_throttled_releases_on_exception(self):
+        """If body of throttled() raises, the slot must still be released."""
+        gov = ConcurrencyGovernor()
+        gov._dynamic_limit = 1
+
+        with pytest.raises(ValueError, match="boom"):
+            async with gov.throttled():
+                raise ValueError("boom")
+
+        # Slot was released — active count back to 0
+        assert gov._active_count == 0
+        # Can acquire again (not permanently blocked)
+        async with gov.throttled():
+            assert gov._active_count == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_wakes_blocked_waiters(self):
+        """Calling stop() must unblock coroutines waiting in acquire()."""
+        gov = ConcurrencyGovernor()
+        gov._dynamic_limit = 1
+
+        # Occupy the single slot
+        await gov.acquire()
+        assert gov._active_count == 1
+
+        unblocked = asyncio.Event()
+
+        async def blocked_acquirer():
+            await gov.acquire()
+            unblocked.set()
+
+        task = asyncio.create_task(blocked_acquirer())
+        await asyncio.sleep(0.01)  # let it block
+
+        # stop() should wake the blocked acquirer
+        await gov.stop()
+        await asyncio.wait_for(unblocked.wait(), timeout=1.0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager(self):
+        """Governor supports async with for start/stop lifecycle."""
+        gov = ConcurrencyGovernor()
+        async with gov:
+            assert gov._running is True
+        # After exit, governor is stopped
+        assert gov._running is False

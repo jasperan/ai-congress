@@ -661,7 +661,7 @@ class EnhancedOrchestrator:
 
         if not initial_responses:
             run.fail("No successful initial responses")
-            await self.concurrency_governor.stop()
+            await self._stop_governor_safe()
             profiler.end_stage("total_pipeline")
             return self._build_result(
                 run, [], {}, role_summary,
@@ -812,6 +812,11 @@ class EnhancedOrchestrator:
                         planner_model = planners[0] if planners else available_models[0]
                         revised_sq = await self.task_reviser.revise(run, signal, planner_model)
                         run.sub_queries = revised_sq
+                        # Update effective_prompt so subsequent rounds can use revised sub-queries
+                        sub_q_text = "\n".join(f"- {sq['text']}" for sq in revised_sq)
+                        effective_prompt = (
+                            f"{prompt}\n\nAddress these refined sub-questions:\n{sub_q_text}"
+                        )
                         run.log_event(
                             "SUB_QUERY_REVISED",
                             planner_model,
@@ -828,8 +833,8 @@ class EnhancedOrchestrator:
 
         profiler.end_stage("wave_2_debate")
 
-        # Stop GPU monitoring
-        await self.concurrency_governor.stop()
+        # Stop GPU monitoring (safe to call multiple times)
+        await self._stop_governor_safe()
 
         # === (o) Compute conviction scores ===
         profiler.start_stage("conviction_and_voting")
@@ -1079,7 +1084,16 @@ class EnhancedOrchestrator:
             audit_events=len(self.audit_trail._events),
         )
         run.final_result = result
+        # Safety: ensure governor is stopped even on unexpected code paths
+        await self._stop_governor_safe()
         return result
+
+    async def _stop_governor_safe(self):
+        """Stop the concurrency governor, suppressing errors. Idempotent."""
+        try:
+            await self.concurrency_governor.stop()
+        except Exception as e:
+            logger.warning("Governor stop failed: %s", e)
 
     def _build_result(
         self,
