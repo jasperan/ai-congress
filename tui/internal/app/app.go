@@ -96,7 +96,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			a.wsClient.Close()
 			return a, tea.Quit
-		case "?":
+		case "f1":
 			a.showHelp = !a.showHelp
 			return a, nil
 		}

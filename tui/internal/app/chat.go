@@ -88,13 +88,13 @@ func (m ChatModel) Update(msg tea.Msg) (ChatModel, tea.Cmd) {
 			}
 			return m, nil
 
-		case "ctrl+m":
+		case "ctrl+s":
 			// Cycle swarm mode
 			m.modeIndex = (m.modeIndex + 1) % len(swarmModes)
 			return m, nil
 
-		case "ctrl+v":
-			// Cycle voting mode
+		case "ctrl+d":
+			// Cycle voting mode (decision mode)
 			m.votingIndex = (m.votingIndex + 1) % len(votingModes)
 			return m, nil
 
@@ -173,8 +173,8 @@ func (m ChatModel) View(width, height int) string {
 
 	hints := "\n\n" +
 		theme.KeyName.Render("Tab") + theme.KeyHint.Render(" switch field") +
-		"  " + theme.KeyName.Render("Ctrl+M") + theme.KeyHint.Render(" mode") +
-		"  " + theme.KeyName.Render("Ctrl+V") + theme.KeyHint.Render(" voting") +
+		"  " + theme.KeyName.Render("Ctrl+S") + theme.KeyHint.Render(" mode") +
+		"  " + theme.KeyName.Render("Ctrl+D") + theme.KeyHint.Render(" voting") +
 		"  " + theme.KeyName.Render("Enter") + theme.KeyHint.Render(" launch") +
 		"  " + theme.KeyName.Render("Esc") + theme.KeyHint.Render(" back")
 	form += hints

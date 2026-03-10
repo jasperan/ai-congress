@@ -245,7 +245,7 @@ func (m DashboardModel) View(width, height int) string {
 
 	hints := []components.KeyHint{
 		{Key: "Tab", Desc: "mode"},
-		{Key: "?", Desc: "help"},
+		{Key: "F1", Desc: "help"},
 		{Key: "q", Desc: "back"},
 	}
 	if m.errMsg != "" {
