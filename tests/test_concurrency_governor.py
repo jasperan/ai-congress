@@ -53,6 +53,10 @@ class TestConcurrencyGovernor:
     def test_get_stats_initial(self):
         gov = ConcurrencyGovernor()
         stats = gov.get_stats()
+        assert stats["vram_used_mb"] == 0
+        assert stats["vram_total_mb"] == 1
+        assert stats["vram_usage_pct"] == 0.0
+        assert stats["gpu_util_pct"] == 0
         assert stats["current_limit"] == gov.max_concurrent
         assert stats["active_tasks"] == 0
         assert stats["waiting_tasks"] == 0

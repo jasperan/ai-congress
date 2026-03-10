@@ -120,27 +120,29 @@ class ConcurrencyGovernor:
 
     async def acquire(self):
         self._waiting_count += 1
-        await self._semaphore.acquire()
+        sem = self._semaphore  # capture before await to avoid race with recreation
+        await sem.acquire()
         self._waiting_count -= 1
         self._active_count += 1
+        return sem
 
-    def release(self):
+    def release(self, sem=None):
         self._active_count -= 1
-        self._semaphore.release()
+        (sem or self._semaphore).release()
 
     @asynccontextmanager
     async def throttled(self):
-        await self.acquire()
+        sem = await self.acquire()
         try:
             yield self.get_stats()
         finally:
-            self.release()
+            self.release(sem)
 
     def get_stats(self) -> dict:
         return {
             "vram_used_mb": self._vram_used,
             "vram_total_mb": self._vram_total,
-            "vram_usage_pct": self._current_usage,
+            "vram_usage_pct": self._current_usage * 100,
             "gpu_util_pct": self._gpu_util,
             "current_limit": self._dynamic_limit,
             "active_tasks": self._active_count,
