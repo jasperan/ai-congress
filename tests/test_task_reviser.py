@@ -140,6 +140,41 @@ class TestTaskReviser:
         assert revised[0]["revision"] == 1
         assert "previous" in revised[0]
 
+    @pytest.mark.asyncio
+    async def test_revise_empty_response_keeps_originals(self):
+        mock_client = AsyncMock()
+        mock_client.chat.return_value = {
+            "message": {"content": "No sub-questions needed."},
+            "success": True,
+        }
+        reviser = TaskReviser(ollama_client=mock_client)
+        run = self._make_run()
+        original_sq = list(run.sub_queries)
+        signal = RevisionSignal(
+            divergence_score=0.8, coverage_score=0.3, avg_confidence=0.4,
+            divergence_threshold=0.4, confidence_threshold=0.5,
+        )
+        result = await reviser.revise(run, signal, "phi3:3.8b")
+        assert len(result) == len(original_sq)
+        assert result[0]["text"] == original_sq[0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_revise_preserves_content_with_leading_dash(self):
+        mock_client = AsyncMock()
+        mock_client.chat.return_value = {
+            "message": {"content": "- -interesting topic about capitals\n- Another question"},
+            "success": True,
+        }
+        reviser = TaskReviser(ollama_client=mock_client)
+        run = self._make_run()
+        signal = RevisionSignal(
+            divergence_score=0.8, coverage_score=0.3, avg_confidence=0.4,
+            divergence_threshold=0.4, confidence_threshold=0.5,
+        )
+        revised = await reviser.revise(run, signal, "phi3:3.8b")
+        # Content starting with dash should be preserved after prefix removal
+        assert revised[0]["text"] == "-interesting topic about capitals"
+
     def test_revisions_remaining(self):
         reviser = TaskReviser(ollama_client=MagicMock(), max_revisions=2)
         run = self._make_run()

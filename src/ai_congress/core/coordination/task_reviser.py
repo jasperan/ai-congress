@@ -136,15 +136,17 @@ class TaskReviser:
             )
             response_text = result.get("message", {}).get("content", "")
 
-            lines = [
-                line.strip().lstrip("- ").strip()
-                for line in response_text.split("\n")
-                if line.strip().startswith("- ") or line.strip().startswith("-")
-            ]
+            lines = []
+            for line in response_text.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("- "):
+                    lines.append(stripped.removeprefix("- ").strip())
+                elif stripped.startswith("-"):
+                    lines.append(stripped.removeprefix("-").strip())
 
             if not lines:
                 logger.warning("Planner returned no revised sub-queries, keeping originals")
-                return run.sub_queries
+                return list(run.sub_queries)
 
             revised = []
             old_texts = [sq["text"] for sq in run.sub_queries]
