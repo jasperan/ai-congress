@@ -13,28 +13,31 @@ import (
 
 // ChatLaunchData holds the data needed to start a chat session on the dashboard.
 type ChatLaunchData struct {
-	Prompt      string
-	Models      []string
-	Mode        string
-	Temperature float64
-	VotingMode  string
+	Prompt           string
+	Models           []string
+	Mode             string
+	Temperature      float64
+	VotingMode       string
+	InferenceBackend string
 }
 
 // --- ChatModel ---
 
 type ChatModel struct {
-	models      []string
-	promptInput textinput.Model
-	tempInput   textinput.Model
-	focusIndex  int
-	modeIndex   int
-	votingIndex int
-	launching   bool
-	err         error
+	models       []string
+	promptInput  textinput.Model
+	tempInput    textinput.Model
+	focusIndex   int
+	modeIndex    int
+	votingIndex  int
+	backendIndex int
+	launching    bool
+	err          error
 }
 
 var swarmModes = []string{"multi_model", "multi_request", "hybrid", "personality", "streaming"}
 var votingModes = []string{"classic", "semantic"}
+var inferenceBackends = []string{"ollama", "openai"}
 
 func NewChatModel(selectedModels []string) ChatModel {
 	prompt := textinput.New()
@@ -98,6 +101,11 @@ func (m ChatModel) Update(msg tea.Msg) (ChatModel, tea.Cmd) {
 			m.votingIndex = (m.votingIndex + 1) % len(votingModes)
 			return m, nil
 
+		case "ctrl+b":
+			// Cycle inference backend (ollama / openai)
+			m.backendIndex = (m.backendIndex + 1) % len(inferenceBackends)
+			return m, nil
+
 		case "enter":
 			if m.launching {
 				return m, nil
@@ -114,11 +122,12 @@ func (m ChatModel) Update(msg tea.Msg) (ChatModel, tea.Cmd) {
 			}
 
 			data := &ChatLaunchData{
-				Prompt:      prompt,
-				Models:      m.models,
-				Mode:        swarmModes[m.modeIndex],
-				Temperature: temp,
-				VotingMode:  votingModes[m.votingIndex],
+				Prompt:           prompt,
+				Models:           m.models,
+				Mode:             swarmModes[m.modeIndex],
+				Temperature:      temp,
+				VotingMode:       votingModes[m.votingIndex],
+				InferenceBackend: inferenceBackends[m.backendIndex],
 			}
 
 			return m, func() tea.Msg {
@@ -154,6 +163,9 @@ func (m ChatModel) View(width, height int) string {
 	votingLabel := theme.Subtitle.Render("Voting: ") +
 		theme.ModelName.Render(votingModes[m.votingIndex])
 
+	backendLabel := theme.Subtitle.Render("Backend: ") +
+		theme.ModelName.Render(inferenceBackends[m.backendIndex])
+
 	form := lipgloss.JoinVertical(lipgloss.Left,
 		title,
 		"",
@@ -163,6 +175,7 @@ func (m ChatModel) View(width, height int) string {
 		"",
 		modeLabel,
 		votingLabel,
+		backendLabel,
 	)
 
 	if m.launching {
@@ -175,6 +188,7 @@ func (m ChatModel) View(width, height int) string {
 		theme.KeyName.Render("Tab") + theme.KeyHint.Render(" switch field") +
 		"  " + theme.KeyName.Render("Ctrl+S") + theme.KeyHint.Render(" mode") +
 		"  " + theme.KeyName.Render("Ctrl+D") + theme.KeyHint.Render(" voting") +
+		"  " + theme.KeyName.Render("Ctrl+B") + theme.KeyHint.Render(" backend") +
 		"  " + theme.KeyName.Render("Enter") + theme.KeyHint.Render(" launch") +
 		"  " + theme.KeyName.Render("Esc") + theme.KeyHint.Render(" back")
 	form += hints

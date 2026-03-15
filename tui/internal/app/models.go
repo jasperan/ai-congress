@@ -29,7 +29,11 @@ type modelItem struct {
 func (i modelItem) FilterValue() string { return i.model.Name }
 func (i modelItem) Title() string       { return i.model.Name }
 func (i modelItem) Description() string {
-	return fmt.Sprintf("Weight: %.2f | Size: %s", i.model.Weight, formatSize(i.model.Size))
+	backend := i.model.Backend
+	if backend == "" {
+		backend = "ollama"
+	}
+	return fmt.Sprintf("Weight: %.2f | Size: %s | %s", i.model.Weight, formatSize(i.model.Size), backend)
 }
 
 func formatSize(bytes int64) string {
@@ -72,7 +76,11 @@ func (d modelDelegate) Render(w io.Writer, m list.Model, index int, listItem lis
 	name := nameStyle.Render(item.model.Name)
 	weight := theme.MutedText.Render(fmt.Sprintf(" (w:%.2f)", item.model.Weight))
 
-	desc := theme.MutedText.Render(fmt.Sprintf("  %s", formatSize(item.model.Size)))
+	backend := item.model.Backend
+	if backend == "" {
+		backend = "ollama"
+	}
+	desc := theme.MutedText.Render(fmt.Sprintf("  %s  [%s]", formatSize(item.model.Size), backend))
 
 	cursor := "  "
 	if isSelected {

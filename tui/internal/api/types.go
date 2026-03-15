@@ -2,26 +2,28 @@ package api
 
 // --- Models ---
 
-// ModelInfo represents an Ollama model from GET /api/models.
+// ModelInfo represents a model from GET /api/models.
 type ModelInfo struct {
-	Name   string  `json:"name"`
-	Size   int64   `json:"size"`
-	Weight float64 `json:"weight"`
+	Name    string  `json:"name"`
+	Size    int64   `json:"size"`
+	Weight  float64 `json:"weight"`
+	Backend string  `json:"backend"`
 }
 
 // --- Chat ---
 
 // ChatRequest is the payload for POST /api/chat.
 type ChatRequest struct {
-	Prompt        string        `json:"prompt"`
-	Models        []string      `json:"models"`
-	Mode          string        `json:"mode"`
-	Temperature   float64       `json:"temperature"`
-	SystemPrompt  string        `json:"system_prompt,omitempty"`
-	Personalities []Personality `json:"personalities,omitempty"`
-	UseRAG        bool          `json:"use_rag,omitempty"`
-	SearchWeb     bool          `json:"search_web,omitempty"`
-	VotingMode    string        `json:"voting_mode"`
+	Prompt           string        `json:"prompt"`
+	Models           []string      `json:"models"`
+	Mode             string        `json:"mode"`
+	Temperature      float64       `json:"temperature"`
+	SystemPrompt     string        `json:"system_prompt,omitempty"`
+	Personalities    []Personality `json:"personalities,omitempty"`
+	UseRAG           bool          `json:"use_rag,omitempty"`
+	SearchWeb        bool          `json:"search_web,omitempty"`
+	VotingMode       string        `json:"voting_mode"`
+	InferenceBackend string        `json:"inference_backend,omitempty"`
 }
 
 // Personality is a name + system_prompt pair.
@@ -103,11 +105,12 @@ type WSMessage struct {
 
 // WSChatRequest is the JSON payload sent over the WebSocket to initiate a chat.
 type WSChatRequest struct {
-	Prompt        string        `json:"prompt"`
-	Models        []string      `json:"models"`
-	Mode          string        `json:"mode"`
-	Stream        bool          `json:"stream"`
-	Temperature   float64       `json:"temperature,omitempty"`
-	Personalities []Personality `json:"personalities,omitempty"`
-	VotingMode    string        `json:"voting_mode,omitempty"`
+	Prompt           string        `json:"prompt"`
+	Models           []string      `json:"models"`
+	Mode             string        `json:"mode"`
+	Stream           bool          `json:"stream"`
+	Temperature      float64       `json:"temperature,omitempty"`
+	Personalities    []Personality `json:"personalities,omitempty"`
+	VotingMode       string        `json:"voting_mode,omitempty"`
+	InferenceBackend string        `json:"inference_backend,omitempty"`
 }

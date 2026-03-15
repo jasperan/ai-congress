@@ -211,12 +211,13 @@ func (a App) switchScreen(msg SwitchScreenMsg) (tea.Model, tea.Cmd) {
 				}
 				// Send the chat request
 				if err := wsClient.SendChat(api.WSChatRequest{
-					Prompt:      chatData.Prompt,
-					Models:      chatData.Models,
-					Mode:        chatData.Mode,
-					Stream:      true,
-					Temperature: chatData.Temperature,
-					VotingMode:  chatData.VotingMode,
+					Prompt:           chatData.Prompt,
+					Models:           chatData.Models,
+					Mode:             chatData.Mode,
+					Stream:           true,
+					Temperature:      chatData.Temperature,
+					VotingMode:       chatData.VotingMode,
+					InferenceBackend: chatData.InferenceBackend,
 				}); err != nil {
 					prog.Send(WSEventMsg{Event: api.WSMessage{Type: "error", Message: "SendChat: " + err.Error()}})
 				}

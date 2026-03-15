@@ -88,7 +88,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Initialize components
 model_registry = ModelRegistry(config.ollama)
 voting_engine = VotingEngine()
-swarm = SwarmOrchestrator(model_registry, voting_engine, config.ollama)
+swarm = SwarmOrchestrator(
+    model_registry, voting_engine, config.ollama,
+    openai_config=config.openai,
+)
 
 # Enhanced orchestrator (lazy init)
 enhanced_orchestrator = None
@@ -167,6 +170,7 @@ class ChatRequest(BaseModel):
     search_web: bool = False  # Enable web search
     document_ids: Optional[List[str]] = None  # Specific documents for RAG
     voting_mode: str = "classic"  # classic | semantic
+    inference_backend: str = "ollama"  # ollama | openai
 
 
 class EnhancedChatRequest(BaseModel):
@@ -190,6 +194,7 @@ class ModelInfo(BaseModel):
     name: str
     size: int
     weight: float
+    backend: str = "ollama"
 
 
 async def load_personalities() -> List[dict]:
@@ -280,17 +285,29 @@ async def root():
 
 @app.get("/api/models", response_model=List[ModelInfo])
 async def list_models():
-    """List all available Ollama models"""
+    """List all available models (Ollama + OpenAI if configured)"""
     models = await model_registry.list_available_models()
 
-    return [
+    result = [
         ModelInfo(
             name=m['name'],
             size=m.get('size', 0),
-            weight=model_registry.get_model_weight(m['name'])
+            weight=model_registry.get_model_weight(m['name']),
+            backend="ollama",
         )
         for m in models
     ]
+
+    # Include OpenAI model if configured
+    if swarm.openai_client is not None:
+        result.append(ModelInfo(
+            name=config.openai.model or "openai",
+            size=0,
+            weight=0.0,
+            backend="openai",
+        ))
+
+    return result
 
 
 @app.post("/api/chat")
@@ -321,6 +338,9 @@ async def chat(request: ChatRequest):
             model_count=len(request.models or []),
             use_rag=request.use_rag, search_web=request.search_web,
         )
+
+        # Apply inference backend for this request
+        swarm.inference_backend = request.inference_backend
 
         # Initialize prompt (may be augmented with RAG/web search)
         augmented_prompt = request.prompt
@@ -514,6 +534,10 @@ async def websocket_chat(websocket: WebSocket):
             stream = data.get('stream', False)
             temperatures = data.get('temperatures', None)
             voting_mode = data.get('voting_mode', 'classic')
+            inference_backend = data.get('inference_backend', 'ollama')
+
+            # Apply inference backend for this WS request
+            swarm.inference_backend = inference_backend
 
             # Data lake session for this WS message
             ws_session = event_logger.new_session()
