@@ -460,6 +460,42 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.websocket("/ws/simulation")
+async def websocket_simulation(websocket: WebSocket):
+    """WebSocket endpoint for real-time congressional simulation"""
+    await websocket.accept()
+    logger.info("Simulation WebSocket connected")
+
+    try:
+        # Receive simulation config
+        data = await websocket.receive_json()
+        topic = data.get("topic", "Should AI systems be regulated by federal law?")
+        num_agents = min(data.get("num_agents", 10), 10)
+        num_ticks = data.get("num_ticks", 100)
+        model = data.get("model", "qwen3.5:9b")
+
+        # Import and run simulation
+        from ..core.simulation import CongressSimulation
+        sim = CongressSimulation(
+            topic=topic,
+            num_agents=num_agents,
+            num_ticks=num_ticks,
+            model=model,
+        )
+
+        async for event in sim.run():
+            await websocket.send_json(event)
+
+    except WebSocketDisconnect:
+        logger.info("Simulation WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"Simulation error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+
+
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     """WebSocket endpoint for streaming chat"""
