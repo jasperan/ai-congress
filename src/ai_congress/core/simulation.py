@@ -355,15 +355,17 @@ class CongressSimulation:
                         model=self.model,
                         messages=messages,
                         stream=True,
+                        think=False,
                         options={
                             "num_predict": self.max_response_tokens,
                             "temperature": self.temperature,
-                            "think": False,
                         },
                     )
 
                     async for chunk in response_stream:
-                        token = chunk.get("message", {}).get("content", "")
+                        # Support both dict-style and attribute-style access
+                        msg = chunk.get("message", {}) if hasattr(chunk, "get") else getattr(chunk, "message", {})
+                        token = msg.get("content", "") if hasattr(msg, "get") else getattr(msg, "content", "")
                         if token:
                             full_response += token
                             yield {
