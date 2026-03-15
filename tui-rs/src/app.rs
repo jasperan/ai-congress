@@ -28,6 +28,18 @@ pub struct App {
     pub throughput_buckets: VecDeque<u32>,
     pub last_bucket_time: Instant,
     pub token_count_this_second: u32,
+    // New: opinion drift
+    pub agent_sentiment: HashMap<String, f64>,
+    // New: amendments
+    pub amendments: Vec<AmendmentInfo>,
+    // New: filibuster
+    pub filibuster: Option<FilibusterInfo>,
+    // New: lobby agents
+    pub lobby_agents: Vec<String>,
+    // New: persuasion edges (influencer, influenced, strength)
+    pub persuasion_edges: Vec<(String, String, f64)>,
+    // New: historical accuracy
+    pub historical_accuracy: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +74,10 @@ pub enum FeedEntryType {
     Speech,
     Vote,
     System,
+    Lobby,
+    Filibuster,
+    Amendment,
+    DirectAddress,
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +86,23 @@ pub struct Vote {
     pub party: String,
     pub vote: String,
     pub rationale: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct AmendmentInfo {
+    pub id: u32,
+    pub proposer: String,
+    pub text: String,
+    pub status: String,
+    pub yea: u32,
+    pub nay: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct FilibusterInfo {
+    pub agent_name: String,
+    pub start_tick: u32,
+    pub active: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -110,6 +143,33 @@ pub struct WsEvent {
     pub abstain: Option<u32>,
     pub timestamp: Option<String>,
     pub model: Option<String>,
+    // New fields for advanced features
+    pub sentiment: Option<f64>,
+    pub old_score: Option<f64>,
+    pub new_score: Option<f64>,
+    pub drift: Option<f64>,
+    pub direction: Option<String>,
+    pub speaker: Option<String>,
+    pub target: Option<String>,
+    pub snippet: Option<String>,
+    pub amendment_id: Option<u32>,
+    pub amendment_text: Option<String>,
+    pub new_bill_text: Option<String>,
+    pub affiliation: Option<String>,
+    pub bias: Option<String>,
+    pub duration: Option<u32>,
+    pub reason: Option<String>,
+    pub influencer: Option<String>,
+    pub influenced: Option<String>,
+    pub strength: Option<f64>,
+    pub is_filibuster: Option<bool>,
+    pub is_lobby: Option<bool>,
+    pub lobby_agents: Option<Vec<serde_json::Value>>,
+    pub historical_accuracy: Option<serde_json::Value>,
+    pub final_sentiments: Option<serde_json::Value>,
+    pub amendments: Option<Vec<serde_json::Value>>,
+    pub top_persuaders: Option<Vec<serde_json::Value>>,
+    pub final_sentiment: Option<f64>,
 }
 
 impl App {
@@ -138,6 +198,12 @@ impl App {
             throughput_buckets: VecDeque::from(vec![0; 60]),
             last_bucket_time: Instant::now(),
             token_count_this_second: 0,
+            agent_sentiment: HashMap::new(),
+            amendments: Vec::new(),
+            filibuster: None,
+            lobby_agents: Vec::new(),
+            persuasion_edges: Vec::new(),
+            historical_accuracy: None,
         }
     }
 
@@ -199,12 +265,21 @@ impl App {
                                 last_response: String::new(),
                             },
                         );
+                        self.agent_sentiment.insert(name.clone(), 0.0);
                         self.agents.push(AgentInfo {
                             name,
                             party,
                             state,
                             chamber,
                         });
+                    }
+                }
+                // Load lobby agent names
+                if let Some(lobby_arr) = &event.lobby_agents {
+                    for la in lobby_arr {
+                        if let Some(name) = la.get("name").and_then(|v| v.as_str()) {
+                            self.lobby_agents.push(name.to_string());
+                        }
                     }
                 }
                 if let Some(m) = &event.model {
@@ -218,7 +293,16 @@ impl App {
                 }
                 self.phase = String::from("INITIALIZED");
                 self.phase_name = String::from("Initialized");
-                self.add_system_feed(format!("Simulation initialized: {} agents", self.agents.len()));
+                let lobby_msg = if self.lobby_agents.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {} lobby witnesses", self.lobby_agents.len())
+                };
+                self.add_system_feed(format!(
+                    "Simulation initialized: {} agents{}",
+                    self.agents.len(),
+                    lobby_msg,
+                ));
             }
             "tick_start" | "tick" => {
                 if let Some(t) = event.tick {
@@ -239,13 +323,11 @@ impl App {
                     .unwrap_or("Unknown")
                     .to_string();
 
-                // Mark agent active and clear token buffer for new generation
                 if let Some(stream) = self.agent_streams.get_mut(&agent_name) {
                     stream.active = true;
                     stream.tokens.clear();
                 }
 
-                // Auto-select this agent in focus mode
                 if let Some(idx) = self.agents.iter().position(|a| a.name == agent_name) {
                     self.selected_agent = idx;
                 }
@@ -293,7 +375,6 @@ impl App {
                         },
                     );
                 }
-                // Count tokens for throughput
                 self.token_count_this_second += 1;
                 self.total_tokens += 1;
             }
@@ -305,7 +386,9 @@ impl App {
                     .unwrap_or("Unknown")
                     .to_string();
 
-                // Extract data from stream before calling add_feed (avoids double borrow)
+                let is_lobby = event.is_lobby.unwrap_or(false);
+                let is_filibuster = event.is_filibuster.unwrap_or(false);
+
                 let mut feed_content = None;
                 if let Some(stream) = self.agent_streams.get_mut(&agent_name) {
                     stream.active = false;
@@ -323,6 +406,11 @@ impl App {
                     feed_content = Some(content);
                 }
 
+                // Update sentiment from event
+                if let Some(s) = event.sentiment {
+                    self.agent_sentiment.insert(agent_name.clone(), s);
+                }
+
                 if let Some(content) = feed_content {
                     let party = self
                         .agents
@@ -331,16 +419,176 @@ impl App {
                         .map(|a| a.party.clone())
                         .unwrap_or_default();
 
+                    let entry_type = if is_lobby {
+                        FeedEntryType::Lobby
+                    } else if is_filibuster {
+                        FeedEntryType::Filibuster
+                    } else {
+                        FeedEntryType::Speech
+                    };
+
                     self.add_feed(FeedEntry {
                         tick: self.current_tick,
                         agent_name: agent_name.clone(),
                         party,
                         content,
-                        entry_type: FeedEntryType::Speech,
+                        entry_type,
                         timestamp: event.timestamp.clone().unwrap_or_default(),
                     });
                 }
             }
+            // ── New: Opinion Drift ──────────────────────────────────
+            "opinion_drift" => {
+                let agent_name = event
+                    .agent_name
+                    .as_deref()
+                    .unwrap_or("Unknown")
+                    .to_string();
+                if let Some(new_score) = event.new_score {
+                    self.agent_sentiment.insert(agent_name, new_score);
+                }
+            }
+            // ── New: Direct Address ─────────────────────────────────
+            "direct_address" => {
+                let speaker = event.speaker.clone().unwrap_or_default();
+                let target = event.target.clone().unwrap_or_default();
+                if !speaker.is_empty() && !target.is_empty() {
+                    self.add_feed(FeedEntry {
+                        tick: self.current_tick,
+                        agent_name: speaker.clone(),
+                        party: String::new(),
+                        content: format!("Addressing {}", target),
+                        entry_type: FeedEntryType::DirectAddress,
+                        timestamp: String::new(),
+                    });
+                }
+            }
+            // ── New: Amendment Events ───────────────────────────────
+            "amendment_proposed" => {
+                let agent_name = event.agent_name.clone().unwrap_or_default();
+                let id = event.amendment_id.unwrap_or(0);
+                let text = event.amendment_text.clone().unwrap_or_default();
+
+                self.amendments.push(AmendmentInfo {
+                    id,
+                    proposer: agent_name.clone(),
+                    text: text.clone(),
+                    status: String::from("pending"),
+                    yea: 0,
+                    nay: 0,
+                });
+
+                self.add_feed(FeedEntry {
+                    tick: self.current_tick,
+                    agent_name,
+                    party: String::new(),
+                    content: format!("Amendment #{}: {}", id, truncate_str(&text, 80)),
+                    entry_type: FeedEntryType::Amendment,
+                    timestamp: String::new(),
+                });
+            }
+            "amendment_vote_result" | "amendment_voting" => {
+                if let Some(id) = event.amendment_id {
+                    let result = event.result.clone().unwrap_or_default();
+                    let yea = event.yea.unwrap_or(0);
+                    let nay = event.nay.unwrap_or(0);
+
+                    if let Some(amend) = self.amendments.iter_mut().find(|a| a.id == id) {
+                        amend.status = result.clone();
+                        amend.yea = yea;
+                        amend.nay = nay;
+                    }
+
+                    if !result.is_empty() {
+                        self.add_system_feed(format!(
+                            "Amendment #{} {}: {}-{}",
+                            id,
+                            result.to_uppercase(),
+                            yea,
+                            nay,
+                        ));
+                    }
+                }
+            }
+            // ── New: Lobby Events ───────────────────────────────────
+            "lobby_speaking" => {
+                let agent_name = event.agent_name.clone().unwrap_or_default();
+                let affiliation = event.affiliation.clone().unwrap_or_default();
+
+                // Create stream for lobby agent if not exists
+                if !self.agent_streams.contains_key(&agent_name) {
+                    self.agent_streams.insert(
+                        agent_name.clone(),
+                        AgentStream {
+                            name: agent_name.clone(),
+                            tokens: String::new(),
+                            active: true,
+                            latency_ms: 0,
+                            last_response: String::new(),
+                        },
+                    );
+                } else if let Some(stream) = self.agent_streams.get_mut(&agent_name) {
+                    stream.active = true;
+                    stream.tokens.clear();
+                }
+
+                self.add_system_feed(format!(
+                    "Lobby testimony: {} ({})",
+                    agent_name, affiliation,
+                ));
+            }
+            // ── New: Filibuster Events ──────────────────────────────
+            "filibuster_start" => {
+                let agent_name = event.agent_name.clone().unwrap_or_default();
+                self.filibuster = Some(FilibusterInfo {
+                    agent_name: agent_name.clone(),
+                    start_tick: self.current_tick,
+                    active: true,
+                });
+                self.add_system_feed(format!(
+                    "FILIBUSTER: {} has taken the floor!",
+                    agent_name,
+                ));
+            }
+            "cloture_vote" => {
+                let result = event.result.clone().unwrap_or_default();
+                let yea = event.yea.unwrap_or(0);
+                let nay = event.nay.unwrap_or(0);
+                self.add_system_feed(format!(
+                    "Cloture vote: {} ({}-{})",
+                    result.to_uppercase(),
+                    yea,
+                    nay,
+                ));
+            }
+            "filibuster_end" => {
+                let reason = event.reason.clone().unwrap_or_default();
+                if let Some(ref mut fb) = self.filibuster {
+                    fb.active = false;
+                }
+                self.add_system_feed(format!("Filibuster ended ({})", reason));
+            }
+            // ── New: Persuasion Events ──────────────────────────────
+            "persuasion_update" => {
+                let influencer = event.influencer.clone().unwrap_or_default();
+                let influenced = event.influenced.clone().unwrap_or_default();
+                let strength = event.strength.unwrap_or(0.0);
+
+                if !influencer.is_empty() && !influenced.is_empty() {
+                    // Update or add edge
+                    if let Some(edge) = self
+                        .persuasion_edges
+                        .iter_mut()
+                        .find(|(a, b, _)| a == &influencer && b == &influenced)
+                    {
+                        edge.2 = strength;
+                    } else {
+                        self.persuasion_edges
+                            .push((influencer, influenced, strength));
+                    }
+                }
+            }
+            // ── Existing handlers ───────────────────────────────────
             "speech" | "statement" => {
                 let agent_name = event
                     .agent
@@ -441,19 +689,36 @@ impl App {
             }
             "simulation_complete" | "complete" | "done" => {
                 self.running = false;
+
+                // Extract historical accuracy
+                if let Some(ref hist) = event.historical_accuracy {
+                    if let Some(acc) = hist.get("accuracy").and_then(|v| v.as_f64()) {
+                        self.historical_accuracy = Some(acc);
+                    }
+                }
+
                 self.simulation_result = event
                     .result
                     .clone()
                     .or_else(|| event.message.clone())
                     .or(Some("Simulation complete".to_string()));
-                self.add_system_feed(
-                    self.simulation_result
-                        .clone()
-                        .unwrap_or_else(|| "Simulation complete".to_string()),
-                );
+
+                let mut result_msg = self
+                    .simulation_result
+                    .clone()
+                    .unwrap_or_else(|| "Simulation complete".to_string());
+
+                if let Some(acc) = self.historical_accuracy {
+                    result_msg.push_str(&format!(" | Historical accuracy: {:.0}%", acc));
+                }
+
+                self.add_system_feed(result_msg);
             }
             "error" => {
-                let msg = event.message.clone().unwrap_or_else(|| "Unknown error".to_string());
+                let msg = event
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| "Unknown error".to_string());
                 self.add_system_feed(format!("ERROR: {}", msg));
             }
             _ => {
@@ -461,7 +726,6 @@ impl App {
             }
         }
 
-        // Update tokens_per_sec from event if provided
         if let Some(tps) = event.tokens_per_sec {
             self.tokens_per_sec = tps;
         }
@@ -519,5 +783,15 @@ impl App {
         if self.feed_scroll < max.saturating_sub(1) {
             self.feed_scroll += 1;
         }
+    }
+}
+
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else if max_len > 3 {
+        format!("{}...", &s[..max_len - 3])
+    } else {
+        s[..max_len].to_string()
     }
 }

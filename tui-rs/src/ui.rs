@@ -43,24 +43,56 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 
     let tps = compute_tps(app);
 
-    let title_line = Line::from(vec![
-        Span::styled(" AI CONGRESS ", Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)),
+    let mut title_spans = vec![
+        Span::styled(
+            " AI CONGRESS ",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
         Span::styled(
             format!("Tick {}/{}", app.current_tick, app.max_ticks),
             Style::default().fg(theme::ACCENT),
         ),
         Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
-        Span::styled(&app.phase_name, Style::default().fg(theme::YELLOW).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &app.phase_name,
+            Style::default()
+                .fg(theme::YELLOW)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
         Span::styled(&app.model, Style::default().fg(theme::PURPLE)),
         Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
-        Span::styled(format!("{:.1} tok/s", tps), Style::default().fg(theme::GREEN)),
-    ]);
+        Span::styled(
+            format!("{:.1} tok/s", tps),
+            Style::default().fg(theme::GREEN),
+        ),
+    ];
+
+    // Show filibuster alert in header
+    if let Some(ref fb) = app.filibuster {
+        if fb.active {
+            title_spans.push(Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)));
+            title_spans.push(Span::styled(
+                format!(" FILIBUSTER: {} ", fb.agent_name),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(theme::RED)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+    }
+
+    let title_line = Line::from(title_spans);
 
     let topic_line = Line::from(vec![
         Span::styled(" Topic: ", Style::default().fg(theme::DIM_GRAY)),
-        Span::styled(truncate(&app.topic, area.width as usize - 10), Style::default().fg(theme::ACCENT)),
+        Span::styled(
+            truncate(&app.topic, area.width as usize - 10),
+            Style::default().fg(theme::ACCENT),
+        ),
     ]);
 
     let progress_line = Line::from(vec![
@@ -84,23 +116,36 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
 // ── Focus Layout ────────────────────────────────────────────────────────────
 
 fn draw_focus(f: &mut Frame, app: &App, area: Rect) {
-    // Split horizontally: agent panes (55%) | right panel (45%)
     let h_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
         .split(area);
 
-    // Left: stack of agent panes (show selected + neighbors)
     draw_agent_pane_stack(f, app, h_chunks[0]);
 
-    // Right: feed (65%) + vote tracker (35%)
-    let r_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-        .split(h_chunks[1]);
+    // Right: feed (50%) + vote tracker (25%) + amendments (25%)
+    let has_amendments = !app.amendments.is_empty();
+    let r_chunks = if has_amendments {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ])
+            .split(h_chunks[1])
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+            .split(h_chunks[1])
+    };
 
     draw_discussion_feed(f, app, r_chunks[0]);
     draw_vote_tracker(f, app, r_chunks[1]);
+    if has_amendments && r_chunks.len() > 2 {
+        draw_amendment_tracker(f, app, r_chunks[2]);
+    }
 }
 
 fn draw_agent_pane_stack(f: &mut Frame, app: &App, area: Rect) {
@@ -114,7 +159,6 @@ fn draw_agent_pane_stack(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    // Show up to 4 agents, centered on selected
     let num_visible = 4.min(app.agents.len());
     let constraints: Vec<Constraint> = (0..num_visible)
         .map(|_| Constraint::Ratio(1, num_visible as u32))
@@ -142,10 +186,17 @@ fn draw_agent_pane_stack(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn draw_single_agent_pane(f: &mut Frame, app: &App, area: Rect, agent_idx: usize, is_selected: bool) {
+fn draw_single_agent_pane(
+    f: &mut Frame,
+    app: &App,
+    area: Rect,
+    agent_idx: usize,
+    is_selected: bool,
+) {
     let agent = &app.agents[agent_idx];
     let stream = app.agent_streams.get(&agent.name);
     let is_active = stream.map(|s| s.active).unwrap_or(false);
+    let sentiment = app.agent_sentiment.get(&agent.name).copied().unwrap_or(0.0);
 
     let border_color = if is_active {
         theme::GREEN
@@ -158,10 +209,21 @@ fn draw_single_agent_pane(f: &mut Frame, app: &App, area: Rect, agent_idx: usize
     let party_char = party_abbrev(&agent.party);
     let party_color = theme::party_color(&agent.party);
 
+    // Sentiment indicator: colored bar
+    let sentiment_display = sentiment_indicator(sentiment);
+
     let status = if is_active {
-        Span::styled(" generating... ", Style::default().fg(theme::GREEN).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " generating... ",
+            Style::default()
+                .fg(theme::GREEN)
+                .add_modifier(Modifier::BOLD),
+        )
     } else if let Some(s) = stream {
-        Span::styled(format!(" idle {}ms ", s.latency_ms), Style::default().fg(theme::DIM_GRAY))
+        Span::styled(
+            format!(" idle {}ms ", s.latency_ms),
+            Style::default().fg(theme::DIM_GRAY),
+        )
     } else {
         Span::styled(" waiting ", Style::default().fg(theme::DIM_GRAY))
     };
@@ -169,11 +231,25 @@ fn draw_single_agent_pane(f: &mut Frame, app: &App, area: Rect, agent_idx: usize
     let title = Line::from(vec![
         Span::styled(
             format!(" {} ", agent.name),
-            Style::default().fg(party_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(party_color)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("({}{})", party_char, if !agent.state.is_empty() { format!("-{}", state_abbrev(&agent.state)) } else { String::new() }),
+            format!(
+                "({}{})",
+                party_char,
+                if !agent.state.is_empty() {
+                    format!("-{}", state_abbrev(&agent.state))
+                } else {
+                    String::new()
+                }
+            ),
             Style::default().fg(party_color),
+        ),
+        Span::styled(
+            format!(" [{}] ", sentiment_display.0),
+            Style::default().fg(sentiment_display.1),
         ),
         status,
     ]);
@@ -183,7 +259,6 @@ fn draw_single_agent_pane(f: &mut Frame, app: &App, area: Rect, agent_idx: usize
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color));
 
-    // Content: show current token stream or last response
     let content = if let Some(s) = stream {
         if s.active && !s.tokens.is_empty() {
             s.tokens.clone()
@@ -196,7 +271,6 @@ fn draw_single_agent_pane(f: &mut Frame, app: &App, area: Rect, agent_idx: usize
         String::from("(waiting)")
     };
 
-    // Take last N lines that fit
     let inner_height = area.height.saturating_sub(2) as usize;
     let display_text = tail_lines(&content, inner_height, area.width.saturating_sub(2) as usize);
 
@@ -221,13 +295,11 @@ fn draw_grid(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    // Split body: grid (80%) + vote summary (20%)
     let v_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(6), Constraint::Length(5)])
         .split(area);
 
-    // 2 rows x 5 cols
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -260,13 +332,17 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
     let agent = &app.agents[agent_idx];
     let stream = app.agent_streams.get(&agent.name);
     let is_active = stream.map(|s| s.active).unwrap_or(false);
+    let sentiment = app.agent_sentiment.get(&agent.name).copied().unwrap_or(0.0);
 
-    let border_color = if is_active { theme::GREEN } else { theme::DARK_GRAY };
+    let border_color = if is_active {
+        theme::GREEN
+    } else {
+        theme::DARK_GRAY
+    };
     let party_color = theme::party_color(&agent.party);
     let party_char = party_abbrev(&agent.party);
 
-    // Compact name
-    let short_name = if agent.name.len() > (area.width as usize).saturating_sub(8) {
+    let short_name = if agent.name.len() > (area.width as usize).saturating_sub(12) {
         let parts: Vec<&str> = agent.name.split_whitespace().collect();
         if parts.len() >= 2 {
             parts.last().unwrap_or(&"?").to_string()
@@ -277,15 +353,20 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
         agent.name.clone()
     };
 
+    let sent_display = sentiment_indicator(sentiment);
+
     let title = Line::from(vec![
         Span::styled(
             format!(" {} ", short_name),
-            Style::default().fg(party_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(party_color)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("({})", party_char),
+            format!("({}) ", party_char),
             Style::default().fg(party_color),
         ),
+        Span::styled(sent_display.0.clone(), Style::default().fg(sent_display.1)),
     ]);
 
     let block = Block::default()
@@ -293,17 +374,22 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color));
 
-    // Status + snippet
     let inner_w = area.width.saturating_sub(2) as usize;
     let status_line = if is_active {
-        Line::from(Span::styled("generating...", Style::default().fg(theme::GREEN)))
+        Line::from(Span::styled(
+            "generating...",
+            Style::default().fg(theme::GREEN),
+        ))
     } else if let Some(s) = stream {
         Line::from(Span::styled(
             format!("idle {}ms", s.latency_ms),
             Style::default().fg(theme::DIM_GRAY),
         ))
     } else {
-        Line::from(Span::styled("waiting", Style::default().fg(theme::DIM_GRAY)))
+        Line::from(Span::styled(
+            "waiting",
+            Style::default().fg(theme::DIM_GRAY),
+        ))
     };
 
     let snippet = if let Some(s) = stream {
@@ -317,11 +403,12 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
         String::new()
     };
 
-    // Check vote
     let vote_line = if let Some(v) = app.votes.get(&agent.name) {
         Line::from(Span::styled(
             format!("VOTE: {}", v.vote.to_uppercase()),
-            Style::default().fg(theme::vote_color(&v.vote)).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme::vote_color(&v.vote))
+                .add_modifier(Modifier::BOLD),
         ))
     } else {
         Line::default()
@@ -336,7 +423,9 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
     }
     lines.push(vote_line);
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
 }
 
@@ -345,7 +434,12 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
 fn draw_discussion_feed(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(Line::from(vec![
-            Span::styled(" Discussion Feed ", Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " Discussion Feed ",
+                Style::default()
+                    .fg(theme::CYAN)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 format!(" ({} msgs) ", app.feed.len()),
                 Style::default().fg(theme::DIM_GRAY),
@@ -377,6 +471,10 @@ fn draw_discussion_feed(f: &mut Frame, app: &App, area: Rect) {
                 FeedEntryType::Speech => (">>", theme::ACCENT),
                 FeedEntryType::Vote => ("##", theme::YELLOW),
                 FeedEntryType::System => ("**", theme::DIM_GRAY),
+                FeedEntryType::Lobby => ("$$", theme::PURPLE),
+                FeedEntryType::Filibuster => ("!!", theme::RED),
+                FeedEntryType::Amendment => ("&&", theme::CYAN),
+                FeedEntryType::DirectAddress => ("->", Color::Magenta),
             };
 
             let content_max = inner_width.saturating_sub(entry.agent_name.len() + 12);
@@ -390,7 +488,9 @@ fn draw_discussion_feed(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled(format!("{} ", icon), Style::default().fg(icon_color)),
                 Span::styled(
                     format!("{}: ", entry.agent_name),
-                    Style::default().fg(party_color).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(party_color)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(content_str, Style::default().fg(theme::GRAY)),
             ]);
@@ -410,30 +510,38 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
     let pending = app.agents.len() as u32 - total_cast.min(app.agents.len() as u32);
 
     let block = Block::default()
-        .title(Line::from(vec![
-            Span::styled(" Vote Tracker ", Style::default().fg(theme::YELLOW).add_modifier(Modifier::BOLD)),
-        ]))
+        .title(Line::from(vec![Span::styled(
+            " Vote Tracker ",
+            Style::default()
+                .fg(theme::YELLOW)
+                .add_modifier(Modifier::BOLD),
+        )]))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme::DARK_GRAY));
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Summary line
     lines.push(Line::from(vec![
         Span::styled(" YEA: ", Style::default().fg(theme::DIM_GRAY)),
         Span::styled(
             format!("{}", app.yea_count),
-            Style::default().fg(theme::GREEN).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme::GREEN)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled("  NAY: ", Style::default().fg(theme::DIM_GRAY)),
         Span::styled(
             format!("{}", app.nay_count),
-            Style::default().fg(theme::RED).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme::RED)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled("  ABSTAIN: ", Style::default().fg(theme::DIM_GRAY)),
         Span::styled(
             format!("{}", app.abstain_count),
-            Style::default().fg(theme::YELLOW).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme::YELLOW)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!("  PENDING: {}", pending),
@@ -441,7 +549,6 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
         ),
     ]));
 
-    // Individual votes
     if !app.votes.is_empty() {
         let mut vote_spans: Vec<Span> = Vec::new();
         vote_spans.push(Span::raw(" "));
@@ -469,7 +576,25 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vote_spans));
     }
 
-    // Result if complete
+    // Persuasion summary
+    if !app.persuasion_edges.is_empty() {
+        let mut persu_spans = vec![Span::styled(
+            " Influence: ",
+            Style::default().fg(theme::DIM_GRAY),
+        )];
+        let mut sorted_edges = app.persuasion_edges.clone();
+        sorted_edges.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        for (inf, infd, str_val) in sorted_edges.iter().take(3) {
+            let inf_short = inf.split_whitespace().last().unwrap_or(inf);
+            let infd_short = infd.split_whitespace().last().unwrap_or(infd);
+            persu_spans.push(Span::styled(
+                format!("{}>{} ({:.2}) ", inf_short, infd_short, str_val),
+                Style::default().fg(Color::Magenta),
+            ));
+        }
+        lines.push(Line::from(persu_spans));
+    }
+
     if let Some(ref result) = app.simulation_result {
         let result_color = if result.contains("PASSED") {
             theme::GREEN
@@ -479,15 +604,95 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
             theme::YELLOW
         };
 
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!(" RESULT: {} ", result),
-                Style::default().fg(result_color).add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            format!(" RESULT: {} ", result),
+            Style::default()
+                .fg(result_color)
+                .add_modifier(Modifier::BOLD),
+        )]));
     }
 
-    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: true });
+    f.render_widget(paragraph, area);
+}
+
+// ── Amendment Tracker ───────────────────────────────────────────────────────
+
+fn draw_amendment_tracker(f: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .title(Line::from(vec![Span::styled(
+            " Amendments ",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        )]))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme::DARK_GRAY));
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    for amend in &app.amendments {
+        let status_color = match amend.status.as_str() {
+            "passed" => theme::GREEN,
+            "failed" => theme::RED,
+            _ => theme::YELLOW,
+        };
+
+        let proposer_short = amend
+            .proposer
+            .split_whitespace()
+            .last()
+            .unwrap_or(&amend.proposer);
+        let inner_w = area.width.saturating_sub(4) as usize;
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!(" #{} ", amend.id),
+                Style::default()
+                    .fg(theme::CYAN)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("[{}] ", amend.status.to_uppercase()),
+                Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("by {} ", proposer_short),
+                Style::default().fg(theme::DIM_GRAY),
+            ),
+            Span::styled(
+                truncate(&amend.text, inner_w.saturating_sub(30)),
+                Style::default().fg(theme::GRAY),
+            ),
+        ]));
+
+        if amend.yea > 0 || amend.nay > 0 {
+            lines.push(Line::from(vec![
+                Span::raw("   "),
+                Span::styled(
+                    format!("YEA: {} ", amend.yea),
+                    Style::default().fg(theme::GREEN),
+                ),
+                Span::styled(
+                    format!("NAY: {}", amend.nay),
+                    Style::default().fg(theme::RED),
+                ),
+            ]));
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::from(Span::styled(
+            " No amendments proposed yet",
+            Style::default().fg(theme::DIM_GRAY),
+        )));
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
 }
 
@@ -498,29 +703,66 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let tps = compute_tps(app);
 
     let status = if app.running { "LIVE" } else { "DONE" };
-    let status_color = if app.running { theme::GREEN } else { theme::DIM_GRAY };
+    let status_color = if app.running {
+        theme::GREEN
+    } else {
+        theme::DIM_GRAY
+    };
 
-    let line = Line::from(vec![
+    let mut spans = vec![
         Span::styled(
             format!(" {} ", status),
-            Style::default().fg(Color::Black).bg(status_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Black)
+                .bg(status_color)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" "),
         Span::styled(sparkline, Style::default().fg(theme::CYAN)),
-        Span::styled(format!(" {:.1} tok/s", tps), Style::default().fg(theme::ACCENT)),
+        Span::styled(
+            format!(" {:.1} tok/s", tps),
+            Style::default().fg(theme::ACCENT),
+        ),
         Span::styled(
             format!("  {} total", app.total_tokens),
             Style::default().fg(theme::DIM_GRAY),
         ),
+    ];
+
+    // Show historical accuracy if available
+    if let Some(acc) = app.historical_accuracy {
+        spans.push(Span::styled(
+            format!("  Accuracy: {:.0}%", acc),
+            Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    spans.extend([
         Span::raw("  "),
-        Span::styled("Tab", Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "Tab",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(":layout ", Style::default().fg(theme::GRAY)),
-        Span::styled("j/k", Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "j/k",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(":agent ", Style::default().fg(theme::GRAY)),
-        Span::styled("q", Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            "q",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::styled(":quit", Style::default().fg(theme::GRAY)),
     ]);
 
+    let line = Line::from(spans);
     let paragraph = Paragraph::new(line);
     f.render_widget(paragraph, area);
 }
@@ -528,9 +770,33 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 fn compute_tps(app: &App) -> f64 {
-    // Average of last 5 seconds
     let recent: u32 = app.throughput_buckets.iter().rev().take(5).sum();
     recent as f64 / 5.0
+}
+
+/// Returns (display_string, color) for a sentiment score
+fn sentiment_indicator(score: f64) -> (String, Color) {
+    let bar_width = 5;
+    let filled = ((score.abs() * bar_width as f64).round() as usize).min(bar_width);
+
+    let (symbol, color) = if score > 0.3 {
+        ("+", theme::GREEN)
+    } else if score > 0.0 {
+        ("+", Color::Green)
+    } else if score < -0.3 {
+        ("-", theme::RED)
+    } else if score < 0.0 {
+        ("-", Color::Yellow)
+    } else {
+        ("=", theme::DIM_GRAY)
+    };
+
+    let bar = format!(
+        "{}{:.1}",
+        symbol.repeat(filled.max(1_usize)),
+        score,
+    );
+    (bar, color)
 }
 
 fn render_sparkline(buckets: &std::collections::VecDeque<u32>, width: usize) -> String {
@@ -583,7 +849,6 @@ fn party_abbrev(party: &str) -> &str {
 }
 
 fn state_abbrev(state: &str) -> String {
-    // Common US state abbreviations
     match state {
         "Alabama" => "AL", "Alaska" => "AK", "Arizona" => "AZ", "Arkansas" => "AR",
         "California" => "CA", "Colorado" => "CO", "Connecticut" => "CT", "Delaware" => "DE",
@@ -608,7 +873,6 @@ fn tail_lines(text: &str, max_lines: usize, line_width: usize) -> String {
         return String::new();
     }
 
-    // Simple word-wrap then take tail
     let mut wrapped: Vec<String> = Vec::new();
     for line in text.lines() {
         if line.is_empty() {
