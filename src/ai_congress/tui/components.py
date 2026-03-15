@@ -42,6 +42,7 @@ def startup_banner(
     mode: str = "multi_model",
     models: Optional[List[str]] = None,
     temperature: float = 0.7,
+    backend: str = "ollama",
 ) -> None:
     """Render a pi-style startup header for AI Congress."""
     models = models or []
@@ -68,6 +69,7 @@ def startup_banner(
         "",
         f"  [{PI_COLORS['custom_label']}]version[/]  [{PI_COLORS['accent']}]{version}[/]",
         f"  [{PI_COLORS['custom_label']}]mode[/]     [{PI_COLORS['accent']}]{mode}[/]",
+        f"  [{PI_COLORS['custom_label']}]backend[/] [{PI_COLORS['accent']}]{backend}[/]",
         f"  [{PI_COLORS['custom_label']}]temp[/]     [{PI_COLORS['accent']}]{temperature}[/]",
     ]
     if models:

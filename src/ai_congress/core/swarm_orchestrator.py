@@ -9,7 +9,8 @@ from .model_registry import ModelRegistry
 from .semantic_voting import SemanticVotingEngine, ModelResponse
 from .debate_manager import DebateManager, DebateConfig
 from .ollama_client import OllamaClient
-from ..utils.config_loader import OllamaConfig, load_config
+from .openai_client import OpenAIClient
+from ..utils.config_loader import OllamaConfig, OpenAIConfig, load_config
 from ..utils.logger import debug_action, info_message, swarm_status_panel, truncate_text, error_message
 from .acp.registry import AgentRegistry
 from .acp.coordination import CoordinationController
@@ -32,6 +33,8 @@ class SwarmOrchestrator:
         voting_engine: VotingEngine,
         ollama_config: OllamaConfig,
         coordination_level: str = "moderate",
+        openai_config: Optional[OpenAIConfig] = None,
+        inference_backend: str = "ollama",
     ):
         self.model_registry = model_registry
         self.voting_engine = voting_engine
@@ -40,6 +43,16 @@ class SwarmOrchestrator:
             timeout=ollama_config.timeout,
             max_retries=ollama_config.max_retries
         )
+        self.openai_client: Optional[OpenAIClient] = None
+        if openai_config and openai_config.base_url:
+            self.openai_client = OpenAIClient(
+                base_url=openai_config.base_url,
+                api_key=openai_config.api_key,
+                model=openai_config.model,
+                timeout=openai_config.timeout,
+                max_retries=openai_config.max_retries,
+            )
+        self.inference_backend = inference_backend  # "ollama" or "openai"
         self.max_concurrent = 10
 
         # ACP components
@@ -200,7 +213,9 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
 
         try:
             # Query phi3 for confidence score
-            summarizer_model = "phi3:3.8b"  # TODO: load from config
+            # Use the highest-weighted available model as summarizer
+            top_models = self.model_registry.get_top_models(n=1)
+            summarizer_model = top_models[0] if top_models else "phi3:3.8b"
             messages = [{'role': 'user', 'content': prompt}]
 
             response = await self.ollama_client.chat(
@@ -246,7 +261,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     agent = CoTAgent(self.ollama_client, model_name)
                 elif reasoning_mode.lower() == "react":
                     agent = ReActAgent(self.ollama_client, model_name)
-                
+
                 if agent:
                     logger.info(f"Using reasoning mode {reasoning_mode} for {model_name}")
                     if stream:
@@ -259,7 +274,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                                 update_callback('chunk', entity_name or model_name, chunk, response_text)
                         if update_callback:
                             update_callback('complete', entity_name or model_name, response_text)
-                        
+
                         return {
                             'model': model_name,
                             'response': response_text,
@@ -273,7 +288,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                         response_text = await agent.run(prompt)
                         if update_callback:
                             update_callback('complete', entity_name or model_name, response_text)
-                            
+
                         return {
                             'model': model_name,
                             'response': response_text,
@@ -288,14 +303,28 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     messages.append({'role': 'system', 'content': system_prompt})
                 messages.append({'role': 'user', 'content': prompt})
 
-            logger.debug(f"Querying {model_name} with temperature {temperature}")
+            # Pick the right client based on inference backend
+            use_openai = (
+                self.inference_backend == "openai"
+                and self.openai_client is not None
+            )
+            client = self.openai_client if use_openai else self.ollama_client
+            # For OpenAI backend, override model_name with the configured model
+            effective_model = (
+                self.openai_client.model if use_openai else model_name
+            )
+
+            logger.debug(
+                f"Querying {effective_model} via {'openai' if use_openai else 'ollama'} "
+                f"with temperature {temperature}"
+            )
 
             if stream:
                 response_text = ""
                 if update_callback:
                     update_callback('start', entity_name or model_name)
-                async for chunk in await self.ollama_client.chat(
-                    model=model_name,
+                async for chunk in await client.chat(
+                    model=effective_model,
                     messages=messages,
                     options={'temperature': temperature},
                     stream=True
@@ -310,13 +339,14 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     'model': model_name,
                     'response': response_text,
                     'temperature': temperature,
-                    'success': True
+                    'success': True,
+                    'backend': 'openai' if use_openai else 'ollama',
                 }
             else:
                 if update_callback:
                     update_callback('start', entity_name or model_name)
-                response = await self.ollama_client.chat(
-                    model=model_name,
+                response = await client.chat(
+                    model=effective_model,
                     messages=messages,
                     options={'temperature': temperature},
                     stream=False
@@ -327,7 +357,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     'model': model_name,
                     'response': response['message']['content'],
                     'temperature': temperature,
-                    'success': True
+                    'success': True,
+                    'backend': 'openai' if use_openai else 'ollama',
                 }
 
         except Exception as e:
@@ -385,7 +416,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
 
         # Get model weights
         weights = [
-            self.model_registry.get_model_weight(r['model']) 
+            self.model_registry.get_model_weight(r['model'])
             for r in successful
         ]
 

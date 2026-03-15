@@ -35,7 +35,10 @@ console = Console(theme=PI_THEME)
 config = load_config()
 model_registry = ModelRegistry(config.ollama)
 voting_engine = VotingEngine()
-swarm = SwarmOrchestrator(model_registry, voting_engine, config.ollama)
+swarm = SwarmOrchestrator(
+    model_registry, voting_engine, config.ollama,
+    openai_config=config.openai,
+)
 
 
 @app.callback()
@@ -45,8 +48,11 @@ def callback():
 
 
 # Move async functions OUT of the commands so they can be reused
-async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning):
+async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, inference_backend="ollama"):
     try:
+        # Apply the chosen inference backend
+        swarm.inference_backend = inference_backend
+
         # Load model weights
         await model_registry.load_benchmark_weights("config/models_benchmark.json")
 
@@ -234,6 +240,19 @@ def interactive_menu():
             dynamic_border(console, "new chat", style="pi.border")
             prompt = Prompt.ask(f"\n[{PI_COLORS['green']}]Enter your prompt[/]")
 
+            # Inference backend selection
+            backend_choices = [
+                questionary.Choice("Ollama (local models, default)", value="ollama"),
+            ]
+            if swarm.openai_client is not None:
+                openai_label = f"OpenAI-compatible ({config.openai.model or 'remote'})"
+                backend_choices.append(
+                    questionary.Choice(openai_label, value="openai")
+                )
+            inference_backend = questionary.select(
+                "Select Inference Backend:", choices=backend_choices
+            ).ask()
+
             modes = [
                 questionary.Choice("Multi-Model (Default)", value="multi_model"),
                 questionary.Choice("Multi-Request (Temperature sampling)", value="multi_request"),
@@ -251,7 +270,8 @@ def interactive_menu():
                  # Maybe ask for models?
                  pass
 
-            console.print(f"[pi.dim]Running swarm in {mode} mode...[/pi.dim]")
+            backend_label = f"{'openai' if inference_backend == 'openai' else 'ollama'}"
+            console.print(f"[pi.dim]Running swarm in {mode} mode via {backend_label}...[/pi.dim]")
             dynamic_border(console, "swarm executing", style="pi.border.dim")
 
             asyncio.run(run_chat_logic(
@@ -262,7 +282,8 @@ def interactive_menu():
                 stream=stream,
                 verbose=True,
                 personalities=[],
-                reasoning=None
+                reasoning=None,
+                inference_backend=inference_backend,
             ))
 
             input("\nPress Enter to continue...")

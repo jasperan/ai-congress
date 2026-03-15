@@ -2,7 +2,7 @@
 Configuration Loader - Loads YAML/JSON configuration files
 """
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import yaml
 from pydantic import BaseModel, Field
 import logging
@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
+    timeout: int = 120
+    max_retries: int = 3
+
+
+class OpenAIConfig(BaseModel):
+    """Config for OpenAI-compatible API backends (e.g. OCA via LiteLLM)."""
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
     timeout: int = 120
     max_retries: int = 3
 
@@ -129,6 +138,16 @@ class DocumentExtractionConfig(BaseModel):
     prefer: str = "docling"  # preferred extractor: docling or tika
 
 
+class DataLakeConfig(BaseModel):
+    user: str = "AI_CONGRESS"
+    password: str = "AiCongress2026"
+    host: str = "localhost"
+    port: int = 1521
+    service: str = "FREEPDB1"
+    pool_min: int = 2
+    pool_max: int = 5
+
+
 class ImageGenConfig(BaseModel):
     model: str = "stable-diffusion"
     default_steps: int = 30
@@ -139,6 +158,7 @@ class ImageGenConfig(BaseModel):
 
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
     voting: VotingConfig = Field(default_factory=VotingConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
@@ -153,6 +173,59 @@ class Config(BaseModel):
     web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
     image_gen: ImageGenConfig = Field(default_factory=ImageGenConfig)
     document_extraction: DocumentExtractionConfig = Field(default_factory=DocumentExtractionConfig)
+    datalake: DataLakeConfig = Field(default_factory=DataLakeConfig)
+
+
+def _apply_codex_config(config: Config) -> None:
+    """Read ~/.codex/config.toml and populate config.openai from it."""
+    codex_path = os.path.expanduser("~/.codex/config.toml")
+    if not os.path.exists(codex_path):
+        return
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # Python <3.11 fallback
+        except ModuleNotFoundError:
+            logger.debug("No TOML parser available; skipping codex config")
+            return
+
+    try:
+        with open(codex_path, "rb") as f:
+            codex = tomllib.load(f)
+
+        # Find the active provider
+        provider_name = codex.get("model_provider", "")
+        providers = codex.get("model_providers", {})
+        provider = providers.get(provider_name, {})
+
+        if provider.get("base_url"):
+            # The OpenAI SDK appends /chat/completions to base_url,
+            # so for LiteLLM proxies we need the URL to end with /v1.
+            base = provider["base_url"].rstrip("/")
+            if not base.endswith("/v1"):
+                base += "/v1"
+            config.openai.base_url = base
+
+        # Model: use top-level model (the active profile's model)
+        if codex.get("model"):
+            config.openai.model = codex["model"]
+        elif provider.get("model"):
+            config.openai.model = provider["model"]
+
+        # API key: check env vars that codex CLI typically uses
+        for env_key in ("OPENAI_API_KEY", "OCA_API_KEY", "CODEX_API_KEY"):
+            val = os.getenv(env_key, "")
+            if val:
+                config.openai.api_key = val
+                break
+
+        if config.openai.base_url:
+            logger.info(f"Loaded OpenAI config from codex: {config.openai.base_url} / {config.openai.model}")
+
+    except Exception as e:
+        logger.debug(f"Could not read codex config: {e}")
 
 
 def load_config(config_file: str = "config/config.yaml") -> Config:
@@ -171,6 +244,18 @@ def load_config(config_file: str = "config/config.yaml") -> Config:
         if os.getenv("OLLAMA_BASE_URL"):
             config.ollama.base_url = os.getenv("OLLAMA_BASE_URL")
             logger.info(f"OLLAMA_BASE_URL override applied: {config.ollama.base_url}")
+
+        # Auto-populate OpenAI config from ~/.codex/config.toml if not set in YAML
+        if not config.openai.base_url:
+            _apply_codex_config(config)
+
+        # Env-var overrides for OpenAI
+        if os.getenv("OPENAI_BASE_URL"):
+            config.openai.base_url = os.getenv("OPENAI_BASE_URL")
+        if os.getenv("OPENAI_API_KEY"):
+            config.openai.api_key = os.getenv("OPENAI_API_KEY")
+        if os.getenv("OPENAI_MODEL"):
+            config.openai.model = os.getenv("OPENAI_MODEL")
 
         logger.info(f"Loaded configuration from {config_file}")
         return config
