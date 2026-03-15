@@ -114,8 +114,8 @@ async fn run_loop(
         // Tick throughput ring buffer
         app.tick_throughput();
 
-        // Poll for terminal events (non-blocking, 30ms timeout)
-        if event::poll(Duration::from_millis(30))? {
+        // Poll for terminal events (non-blocking, 16ms for ~60fps)
+        if event::poll(Duration::from_millis(16))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
@@ -151,37 +151,45 @@ async fn run_loop(
             }
         }
 
-        // Try to receive WebSocket events (non-blocking via tokio::select with timeout)
-        let ws_result = tokio::time::timeout(Duration::from_millis(10), ws.next_event()).await;
+        // Drain ALL available WebSocket events per frame (up to 500)
+        // At ~60 tok/s, processing only 1 event per ~40ms frame causes backpressure
+        let mut ws_closed = false;
+        for _ in 0..500 {
+            let ws_result =
+                tokio::time::timeout(Duration::from_millis(1), ws.next_event()).await;
+            match ws_result {
+                Ok(Some(event_value)) => {
+                    if let Ok(ws_event) =
+                        serde_json::from_value::<app::WsEvent>(event_value)
+                    {
+                        app.handle_event(ws_event);
+                    }
+                }
+                Ok(None) => {
+                    ws_closed = true;
+                    break;
+                }
+                Err(_) => break, // no more events ready
+            }
+        }
 
-        match ws_result {
-            Ok(Some(event_value)) => {
-                if let Ok(ws_event) = serde_json::from_value::<app::WsEvent>(event_value) {
-                    app.handle_event(ws_event);
+        if ws_closed {
+            if app.running {
+                app.running = false;
+                if app.simulation_result.is_none() {
+                    app.simulation_result = Some("Connection lost".to_string());
                 }
             }
-            Ok(None) => {
-                // WebSocket closed
-                if app.running {
-                    app.running = false;
-                    if app.simulation_result.is_none() {
-                        app.simulation_result = Some("Connection lost".to_string());
+            // Do one final render then wait for 'q'
+            terminal.draw(|f| ui::draw(f, app))?;
+            loop {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press
+                        && (key.code == KeyCode::Char('q') || key.code == KeyCode::Esc)
+                    {
+                        return Ok(());
                     }
                 }
-                // Do one final render then wait for 'q'
-                terminal.draw(|f| ui::draw(f, app))?;
-                loop {
-                    if let Event::Key(key) = event::read()? {
-                        if key.kind == KeyEventKind::Press
-                            && (key.code == KeyCode::Char('q') || key.code == KeyCode::Esc)
-                        {
-                            return Ok(());
-                        }
-                    }
-                }
-            }
-            Err(_) => {
-                // Timeout — no WS event available, continue loop
             }
         }
     }
