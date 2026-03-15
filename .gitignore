@@ -183,9 +183,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 
@@ -232,4 +232,12 @@ docs/
 *_ENHANCEMENTS.md
 *_REPORT.md
 
+# Agent/skill directories (local only)
+.agents/
+.claude/
+.crush/
+.openhands/
+.serena/
 
+# Rust build artifacts (tui-rs)
+tui-rs/target/

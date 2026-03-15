@@ -1,0 +1,22 @@
+[package]
+name = "congress-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Real-time TUI for AI Congress simulations"
+
+[[bin]]
+name = "congress-tui"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+unicode-width = "0.2"
+url = "2"
+clap = { version = "4", features = ["derive"] }

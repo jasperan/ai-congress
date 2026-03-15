@@ -279,51 +279,6 @@ class CongressSimulation:
         else:
             self.agent_positions.setdefault(agent_name, "undecided")
 
-    async def _query_agent(self, agent: dict, phase: Phase) -> tuple:
-        """Query Ollama for a single agent's response. Returns (response_text, latency_ms, tokens_list)."""
-        prompt = self._build_tick_prompt(agent, phase)
-
-        messages = [
-            {"role": "system", "content": agent["system_prompt"]},
-            {"role": "user", "content": prompt},
-        ]
-
-        tokens_collected = []
-        start_ms = time.monotonic()
-
-        try:
-            client = ollama.AsyncClient(host="http://127.0.0.1:11434")
-            response_stream = await client.chat(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                options={
-                    "num_predict": self.max_response_tokens,
-                    "temperature": self.temperature,
-                    "think": False,
-                },
-            )
-
-            full_response = ""
-            async for chunk in response_stream:
-                token = chunk.get("message", {}).get("content", "")
-                if token:
-                    full_response += token
-                    tokens_collected.append(token)
-
-            latency_ms = int((time.monotonic() - start_ms) * 1000)
-
-            # Strip any residual <think> blocks
-            full_response = re.sub(r"<think>.*?</think>", "", full_response, flags=re.DOTALL).strip()
-
-            return full_response, latency_ms, tokens_collected
-
-        except Exception as e:
-            latency_ms = int((time.monotonic() - start_ms) * 1000)
-            logger.error("Ollama query failed for %s: %s", agent["name"], e)
-            error_msg = f"[Connection error: {e}]"
-            return error_msg, latency_ms, [error_msg]
-
     async def run(self) -> AsyncGenerator[Dict, None]:
         """Run the simulation, yielding events as they occur."""
         # Build phase summary for the start event
@@ -385,16 +340,49 @@ class CongressSimulation:
                     "chamber": agent.get("chamber", "Unknown"),
                 }
 
-                full_response, latency_ms, tokens = await self._query_agent(agent, phase)
+                # Inline streaming: yield tokens as they arrive from Ollama
+                prompt = self._build_tick_prompt(agent, phase)
+                messages = [
+                    {"role": "system", "content": agent["system_prompt"]},
+                    {"role": "user", "content": prompt},
+                ]
+                full_response = ""
+                start_ms = time.monotonic()
 
-                # Stream tokens
-                for token in tokens:
-                    yield {
-                        "type": "token_stream",
-                        "tick": tick,
-                        "agent_name": agent["name"],
-                        "tokens": token,
-                    }
+                try:
+                    client = ollama.AsyncClient(host="http://127.0.0.1:11434")
+                    response_stream = await client.chat(
+                        model=self.model,
+                        messages=messages,
+                        stream=True,
+                        options={
+                            "num_predict": self.max_response_tokens,
+                            "temperature": self.temperature,
+                            "think": False,
+                        },
+                    )
+
+                    async for chunk in response_stream:
+                        token = chunk.get("message", {}).get("content", "")
+                        if token:
+                            full_response += token
+                            yield {
+                                "type": "token_stream",
+                                "tick": tick,
+                                "agent_name": agent["name"],
+                                "tokens": token,
+                            }
+
+                except Exception as e:
+                    logger.error("Ollama query failed for %s: %s", agent["name"], e)
+                    full_response = f"[Connection error: {e}]"
+
+                latency_ms = int((time.monotonic() - start_ms) * 1000)
+
+                # Strip residual <think> blocks
+                full_response = re.sub(
+                    r"<think>.*?</think>", "", full_response, flags=re.DOTALL
+                ).strip()
 
                 # Record transcript
                 self.transcript.append({
