@@ -149,7 +149,7 @@ def chat(
 
 @app.command()
 def models():
-    """List available Ollama models"""
+    """List available models (Ollama + OpenAI if configured)"""
     async def list_models():
         try:
             available = await model_registry.list_available_models()
@@ -162,13 +162,24 @@ def models():
                 border_style=PI_COLORS["dark_gray"],
             )
             table.add_column("Name", style=PI_COLORS["cyan"])
+            table.add_column("Backend", style=PI_COLORS["accent"])
             table.add_column("Size (GB)", style=PI_COLORS["thinking_high"], justify="right")
             table.add_column("Weight", style=PI_COLORS["yellow"], justify="right")
 
             for model in available:
                 size_gb = f"{model['size'] / (1024**3):.1f}" if model['size'] else "N/A"
                 weight = f"{model_registry.get_model_weight(model['name']):.2f}"
-                table.add_row(model['name'], size_gb, weight)
+                table.add_row(model['name'], "ollama", size_gb, weight)
+
+            # Show OpenAI model if configured
+            if swarm.openai_client is not None:
+                table.add_row(
+                    config.openai.model or "remote",
+                    "openai",
+                    "N/A",
+                    "N/A",
+                )
+
             console.print(table)
 
             dynamic_border(console, style="pi.border.dim")
@@ -264,8 +275,12 @@ def interactive_menu():
 
             stream = Confirm.ask("Stream responses?", default=True)
 
-            # Default models for now, could be improved
-            models_list = ["phi3:3.8b", "mistral:7b"]
+            # Pick agent labels based on backend
+            if inference_backend == "openai":
+                openai_model = config.openai.model or "gpt"
+                models_list = [f"{openai_model}:agent-1", f"{openai_model}:agent-2"]
+            else:
+                models_list = ["phi3:3.8b", "mistral:7b"]
             if mode == "multi_model":
                  # Maybe ask for models?
                  pass
