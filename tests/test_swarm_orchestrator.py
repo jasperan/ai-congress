@@ -104,7 +104,7 @@ class TestSwarmOrchestrator:
             {'name': 'Biden', 'system_prompt': 'You are Joe Biden...'}
         ]
         prompt = "What is your opinion on AI?"
-        base_model = "qwen2.5:7b"
+        base_model = "qwen3.5:9b"
 
         # Mock the query_model method
         mock_responses = [
@@ -146,10 +146,10 @@ class TestSwarmOrchestrator:
             # Verify query_model was called twice with correct system prompts
             assert mock_query.call_count == 2
             calls = mock_query.call_args_list
-            # call_args_list stores positional args in [0] and kwargs in [1]
-            # query_model(base_model, prompt, temperature, system_prompt)
-            assert calls[0][0][3] == 'You are Donald Trump...'  # 4th positional arg
-            assert calls[1][0][3] == 'You are Joe Biden...'     # 4th positional arg
+            # query_model is called with base_model as positional, messages as kwarg
+            # system prompt is the first message in the messages list
+            assert calls[0].kwargs['messages'][0]['content'] == 'You are Donald Trump...'
+            assert calls[1].kwargs['messages'][0]['content'] == 'You are Joe Biden...'
 
     @pytest.mark.asyncio
     async def test_personality_swarm_no_successful_responses(self):

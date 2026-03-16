@@ -751,15 +751,23 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             async with semaphore:
                 return await task
 
-        # Use as_completed for live updates
-        responses = []
-        task_to_personality = {limited_query(task): personality for task, personality in zip(tasks, personalities)}
+        # Execute all queries concurrently and collect results
+        results = await asyncio.gather(
+            *(limited_query(task) for task in tasks),
+            return_exceptions=True
+        )
 
-        for coro in asyncio.as_completed(list(task_to_personality.keys())):
-            personality = task_to_personality[coro]
-            response = await coro
-            response['personality_name'] = personality['name']
-            responses.append(response)
+        responses = []
+        for personality, result in zip(personalities, results):
+            if isinstance(result, Exception):
+                responses.append({
+                    'success': False,
+                    'response': str(result),
+                    'personality_name': personality['name']
+                })
+            else:
+                result['personality_name'] = personality['name']
+                responses.append(result)
 
         # Filter successful responses
         successful = [r for r in responses if r['success']]
