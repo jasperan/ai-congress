@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +40,8 @@ pub struct App {
     pub persuasion_edges: Vec<(String, String, f64)>,
     // New: historical accuracy
     pub historical_accuracy: Option<f64>,
+    // Shell feedback
+    pub toast: Option<ToastState>,
 }
 
 #[derive(Clone, Debug)]
@@ -109,6 +111,21 @@ pub struct FilibusterInfo {
 pub enum LayoutMode {
     Focus,
     Grid,
+}
+
+#[derive(Clone, Debug)]
+pub enum ToastLevel {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+#[derive(Clone, Debug)]
+pub struct ToastState {
+    pub level: ToastLevel,
+    pub message: String,
+    pub expires_at: Instant,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -204,6 +221,7 @@ impl App {
             lobby_agents: Vec::new(),
             persuasion_edges: Vec::new(),
             historical_accuracy: None,
+            toast: None,
         }
     }
 
@@ -215,10 +233,29 @@ impl App {
             let seconds = elapsed.as_secs().min(60) as usize;
             for _ in 0..seconds {
                 self.throughput_buckets.pop_front();
-                self.throughput_buckets.push_back(self.token_count_this_second);
+                self.throughput_buckets
+                    .push_back(self.token_count_this_second);
                 self.token_count_this_second = 0;
             }
             self.last_bucket_time = now;
+        }
+    }
+
+    pub fn show_toast(&mut self, level: ToastLevel, message: impl Into<String>) {
+        self.toast = Some(ToastState {
+            level,
+            message: message.into(),
+            expires_at: Instant::now() + Duration::from_secs(4),
+        });
+    }
+
+    pub fn expire_toast(&mut self) {
+        if self
+            .toast
+            .as_ref()
+            .is_some_and(|toast| Instant::now() >= toast.expires_at)
+        {
+            self.toast = None;
         }
     }
 
@@ -439,11 +476,7 @@ impl App {
             }
             // ── New: Opinion Drift ──────────────────────────────────
             "opinion_drift" => {
-                let agent_name = event
-                    .agent_name
-                    .as_deref()
-                    .unwrap_or("Unknown")
-                    .to_string();
+                let agent_name = event.agent_name.as_deref().unwrap_or("Unknown").to_string();
                 if let Some(new_score) = event.new_score {
                     self.agent_sentiment.insert(agent_name, new_score);
                 }
@@ -532,10 +565,7 @@ impl App {
                     stream.tokens.clear();
                 }
 
-                self.add_system_feed(format!(
-                    "Lobby testimony: {} ({})",
-                    agent_name, affiliation,
-                ));
+                self.add_system_feed(format!("Lobby testimony: {} ({})", agent_name, affiliation,));
             }
             // ── New: Filibuster Events ──────────────────────────────
             "filibuster_start" => {
@@ -545,10 +575,11 @@ impl App {
                     start_tick: self.current_tick,
                     active: true,
                 });
-                self.add_system_feed(format!(
-                    "FILIBUSTER: {} has taken the floor!",
-                    agent_name,
-                ));
+                self.add_system_feed(format!("FILIBUSTER: {} has taken the floor!", agent_name,));
+                self.show_toast(
+                    ToastLevel::Warning,
+                    format!("Filibuster started: {}", agent_name),
+                );
             }
             "cloture_vote" => {
                 let result = event.result.clone().unwrap_or_default();
@@ -567,6 +598,7 @@ impl App {
                     fb.active = false;
                 }
                 self.add_system_feed(format!("Filibuster ended ({})", reason));
+                self.show_toast(ToastLevel::Info, format!("Filibuster ended ({})", reason));
             }
             // ── New: Persuasion Events ──────────────────────────────
             "persuasion_update" => {
@@ -712,7 +744,8 @@ impl App {
                     result_msg.push_str(&format!(" | Historical accuracy: {:.0}%", acc));
                 }
 
-                self.add_system_feed(result_msg);
+                self.add_system_feed(result_msg.clone());
+                self.show_toast(ToastLevel::Success, result_msg);
             }
             "error" => {
                 let msg = event
@@ -720,6 +753,7 @@ impl App {
                     .clone()
                     .unwrap_or_else(|| "Unknown error".to_string());
                 self.add_system_feed(format!("ERROR: {}", msg));
+                self.show_toast(ToastLevel::Error, format!("Error: {}", msg));
             }
             _ => {
                 // Unknown event type; ignore silently

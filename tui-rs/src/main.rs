@@ -17,7 +17,10 @@ use ratatui::prelude::*;
 use ws::WsClient;
 
 #[derive(Parser, Debug)]
-#[command(name = "congress-tui", about = "Real-time TUI for AI Congress simulations")]
+#[command(
+    name = "congress-tui",
+    about = "Real-time TUI for AI Congress simulations"
+)]
 struct Args {
     /// WebSocket server URL
     #[arg(long, default_value = "ws://localhost:8000/ws/simulation")]
@@ -111,8 +114,9 @@ async fn run_loop(
         // Render
         terminal.draw(|f| ui::draw(f, app))?;
 
-        // Tick throughput ring buffer
+        // Tick throughput ring buffer and expire shell feedback
         app.tick_throughput();
+        app.expire_toast();
 
         // Poll for terminal events (non-blocking, 16ms for ~60fps)
         if event::poll(Duration::from_millis(16))? {
@@ -155,13 +159,10 @@ async fn run_loop(
         // At ~60 tok/s, processing only 1 event per ~40ms frame causes backpressure
         let mut ws_closed = false;
         for _ in 0..500 {
-            let ws_result =
-                tokio::time::timeout(Duration::from_millis(1), ws.next_event()).await;
+            let ws_result = tokio::time::timeout(Duration::from_millis(1), ws.next_event()).await;
             match ws_result {
                 Ok(Some(event_value)) => {
-                    if let Ok(ws_event) =
-                        serde_json::from_value::<app::WsEvent>(event_value)
-                    {
+                    if let Ok(ws_event) = serde_json::from_value::<app::WsEvent>(event_value) {
                         app.handle_event(ws_event);
                     }
                 }
@@ -179,6 +180,7 @@ async fn run_loop(
                 if app.simulation_result.is_none() {
                     app.simulation_result = Some("Connection lost".to_string());
                 }
+                app.show_toast(app::ToastLevel::Error, "Connection lost");
             }
             // Do one final render then wait for 'q'
             terminal.draw(|f| ui::draw(f, app))?;

@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, FeedEntryType, LayoutMode};
+use crate::app::{App, FeedEntryType, LayoutMode, ToastLevel};
 use crate::theme;
 
 /// Main draw function dispatches to Focus or Grid layout.
@@ -29,6 +29,16 @@ pub fn draw(f: &mut Frame, app: &App) {
     match app.layout_mode {
         LayoutMode::Focus => draw_focus(f, app, chunks[1]),
         LayoutMode::Grid => draw_grid(f, app, chunks[1]),
+    }
+
+    if app.toast.is_some() {
+        let toast_area = Rect::new(
+            1,
+            chunks[2].y.saturating_sub(3),
+            size.width.saturating_sub(2),
+            3,
+        );
+        draw_toast(f, app, toast_area);
     }
 }
 
@@ -272,7 +282,11 @@ fn draw_single_agent_pane(
     };
 
     let inner_height = area.height.saturating_sub(2) as usize;
-    let display_text = tail_lines(&content, inner_height, area.width.saturating_sub(2) as usize);
+    let display_text = tail_lines(
+        &content,
+        inner_height,
+        area.width.saturating_sub(2) as usize,
+    );
 
     let paragraph = Paragraph::new(display_text)
         .block(block)
@@ -393,7 +407,11 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
     };
 
     let snippet = if let Some(s) = stream {
-        let text = if s.active { &s.tokens } else { &s.last_response };
+        let text = if s.active {
+            &s.tokens
+        } else {
+            &s.last_response
+        };
         if text.is_empty() {
             String::new()
         } else {
@@ -423,9 +441,7 @@ fn draw_grid_cell(f: &mut Frame, app: &App, area: Rect, agent_idx: usize) {
     }
     lines.push(vote_line);
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
 }
 
@@ -532,9 +548,7 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("  NAY: ", Style::default().fg(theme::DIM_GRAY)),
         Span::styled(
             format!("{}", app.nay_count),
-            Style::default()
-                .fg(theme::RED)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(theme::RED).add_modifier(Modifier::BOLD),
         ),
         Span::styled("  ABSTAIN: ", Style::default().fg(theme::DIM_GRAY)),
         Span::styled(
@@ -612,9 +626,7 @@ fn draw_vote_tracker(f: &mut Frame, app: &App, area: Rect) {
         )]));
     }
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
 }
 
@@ -656,7 +668,9 @@ fn draw_amendment_tracker(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::styled(
                 format!("[{}] ", amend.status.to_uppercase()),
-                Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("by {} ", proposer_short),
@@ -690,9 +704,7 @@ fn draw_amendment_tracker(f: &mut Frame, app: &App, area: Rect) {
         )));
     }
 
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
 }
 
@@ -708,6 +720,15 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         theme::DIM_GRAY
     };
+    let layout_label = match app.layout_mode {
+        LayoutMode::Focus => "Focus",
+        LayoutMode::Grid => "Grid",
+    };
+    let selected_agent = app
+        .agents
+        .get(app.selected_agent)
+        .map(|a| a.name.as_str())
+        .unwrap_or("None");
 
     let mut spans = vec![
         Span::styled(
@@ -727,13 +748,22 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
             format!("  {} total", app.total_tokens),
             Style::default().fg(theme::DIM_GRAY),
         ),
+        Span::styled(
+            format!("  Layout: {}", layout_label),
+            Style::default().fg(theme::YELLOW),
+        ),
+        Span::styled(
+            format!("  Agent: {}", truncate(selected_agent, 16)),
+            Style::default().fg(theme::PURPLE),
+        ),
     ];
 
-    // Show historical accuracy if available
     if let Some(acc) = app.historical_accuracy {
         spans.push(Span::styled(
             format!("  Accuracy: {:.0}%", acc),
-            Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
         ));
     }
 
@@ -752,7 +782,14 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 .fg(theme::CYAN)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(":agent ", Style::default().fg(theme::GRAY)),
+        Span::styled(":focus/feed ", Style::default().fg(theme::GRAY)),
+        Span::styled(
+            "PgUp/PgDn",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(":scroll ", Style::default().fg(theme::GRAY)),
         Span::styled(
             "q",
             Style::default()
@@ -765,6 +802,32 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let line = Line::from(spans);
     let paragraph = Paragraph::new(line);
     f.render_widget(paragraph, area);
+}
+
+fn draw_toast(f: &mut Frame, app: &App, area: Rect) {
+    let Some(toast) = app.toast.as_ref() else {
+        return;
+    };
+
+    let (prefix, color) = match toast.level {
+        ToastLevel::Info => ("•", theme::ACCENT),
+        ToastLevel::Success => ("✓", theme::GREEN),
+        ToastLevel::Warning => ("!", theme::YELLOW),
+        ToastLevel::Error => ("✕", theme::RED),
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(color));
+    let content = Paragraph::new(Line::from(vec![
+        Span::styled(
+            format!(" {} ", prefix),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(toast.message.as_str(), Style::default().fg(color)),
+    ]))
+    .block(block);
+    f.render_widget(content, area);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -791,11 +854,7 @@ fn sentiment_indicator(score: f64) -> (String, Color) {
         ("=", theme::DIM_GRAY)
     };
 
-    let bar = format!(
-        "{}{:.1}",
-        symbol.repeat(filled.max(1_usize)),
-        score,
-    );
+    let bar = format!("{}{:.1}", symbol.repeat(filled.max(1_usize)), score,);
     (bar, color)
 }
 
@@ -850,19 +909,56 @@ fn party_abbrev(party: &str) -> &str {
 
 fn state_abbrev(state: &str) -> String {
     match state {
-        "Alabama" => "AL", "Alaska" => "AK", "Arizona" => "AZ", "Arkansas" => "AR",
-        "California" => "CA", "Colorado" => "CO", "Connecticut" => "CT", "Delaware" => "DE",
-        "Florida" => "FL", "Georgia" => "GA", "Hawaii" => "HI", "Idaho" => "ID",
-        "Illinois" => "IL", "Indiana" => "IN", "Iowa" => "IA", "Kansas" => "KS",
-        "Kentucky" => "KY", "Louisiana" => "LA", "Maine" => "ME", "Maryland" => "MD",
-        "Massachusetts" => "MA", "Michigan" => "MI", "Minnesota" => "MN", "Mississippi" => "MS",
-        "Missouri" => "MO", "Montana" => "MT", "Nebraska" => "NE", "Nevada" => "NV",
-        "New Hampshire" => "NH", "New Jersey" => "NJ", "New Mexico" => "NM", "New York" => "NY",
-        "North Carolina" => "NC", "North Dakota" => "ND", "Ohio" => "OH", "Oklahoma" => "OK",
-        "Oregon" => "OR", "Pennsylvania" => "PA", "Rhode Island" => "RI",
-        "South Carolina" => "SC", "South Dakota" => "SD", "Tennessee" => "TN", "Texas" => "TX",
-        "Utah" => "UT", "Vermont" => "VT", "Virginia" => "VA", "Washington" => "WA",
-        "West Virginia" => "WV", "Wisconsin" => "WI", "Wyoming" => "WY",
+        "Alabama" => "AL",
+        "Alaska" => "AK",
+        "Arizona" => "AZ",
+        "Arkansas" => "AR",
+        "California" => "CA",
+        "Colorado" => "CO",
+        "Connecticut" => "CT",
+        "Delaware" => "DE",
+        "Florida" => "FL",
+        "Georgia" => "GA",
+        "Hawaii" => "HI",
+        "Idaho" => "ID",
+        "Illinois" => "IL",
+        "Indiana" => "IN",
+        "Iowa" => "IA",
+        "Kansas" => "KS",
+        "Kentucky" => "KY",
+        "Louisiana" => "LA",
+        "Maine" => "ME",
+        "Maryland" => "MD",
+        "Massachusetts" => "MA",
+        "Michigan" => "MI",
+        "Minnesota" => "MN",
+        "Mississippi" => "MS",
+        "Missouri" => "MO",
+        "Montana" => "MT",
+        "Nebraska" => "NE",
+        "Nevada" => "NV",
+        "New Hampshire" => "NH",
+        "New Jersey" => "NJ",
+        "New Mexico" => "NM",
+        "New York" => "NY",
+        "North Carolina" => "NC",
+        "North Dakota" => "ND",
+        "Ohio" => "OH",
+        "Oklahoma" => "OK",
+        "Oregon" => "OR",
+        "Pennsylvania" => "PA",
+        "Rhode Island" => "RI",
+        "South Carolina" => "SC",
+        "South Dakota" => "SD",
+        "Tennessee" => "TN",
+        "Texas" => "TX",
+        "Utah" => "UT",
+        "Vermont" => "VT",
+        "Virginia" => "VA",
+        "Washington" => "WA",
+        "West Virginia" => "WV",
+        "Wisconsin" => "WI",
+        "Wyoming" => "WY",
         _ => return state[..2.min(state.len())].to_uppercase(),
     }
     .to_string()
