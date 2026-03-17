@@ -29,6 +29,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     match app.layout_mode {
         LayoutMode::Focus => draw_focus(f, app, chunks[1]),
         LayoutMode::Grid => draw_grid(f, app, chunks[1]),
+        LayoutMode::History => draw_history(f, app, chunks[1]),
     }
 
     if app.toast.is_some() {
@@ -421,6 +422,109 @@ fn draw_selected_agent_detail(f: &mut Frame, app: &App, area: Rect) {
 
     let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     f.render_widget(paragraph, area);
+}
+
+fn draw_history(f: &mut Frame, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .split(area);
+
+    let block_left = Block::default()
+        .title(Line::from(vec![Span::styled(
+            " Replay Feed ",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        )]))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme::DARK_GRAY));
+
+    if app.feed.is_empty() {
+        let p = Paragraph::new("No history yet").block(block_left);
+        f.render_widget(p, chunks[0]);
+        let p2 = Paragraph::new("Run the simulation to collect replayable feed events.").block(
+            Block::default()
+                .title(" Replay Detail ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme::DARK_GRAY)),
+        );
+        f.render_widget(p2, chunks[1]);
+        return;
+    }
+
+    let mut items = Vec::new();
+    for (idx, entry) in app.feed.iter().enumerate() {
+        let selected = idx == app.history_index;
+        let label = format!("[T{:>3}] {}", entry.tick, entry.agent_name);
+        let style = if selected {
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme::GRAY)
+        };
+        items.push(ListItem::new(Line::from(vec![
+            Span::styled(label, style),
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                truncate(&entry.content, chunks[0].width.saturating_sub(18) as usize),
+                Style::default().fg(theme::DIM_GRAY),
+            ),
+        ])));
+    }
+    let list = List::new(items).block(block_left);
+    f.render_widget(list, chunks[0]);
+
+    let entry = &app.feed[app.history_index.min(app.feed.len().saturating_sub(1))];
+    let party_color = theme::party_color(&entry.party);
+    let (icon, icon_color) = match entry.entry_type {
+        FeedEntryType::Speech => (">>", theme::ACCENT),
+        FeedEntryType::Vote => ("##", theme::YELLOW),
+        FeedEntryType::System => ("**", theme::DIM_GRAY),
+        FeedEntryType::Lobby => ("$$", theme::PURPLE),
+        FeedEntryType::Filibuster => ("!!", theme::RED),
+        FeedEntryType::Amendment => ("&&", theme::CYAN),
+        FeedEntryType::DirectAddress => ("->", Color::Magenta),
+    };
+    let detail_lines = vec![
+        Line::from(Span::styled(
+            format!("{} {}", entry.agent_name, entry.timestamp),
+            Style::default()
+                .fg(party_color)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            format!(
+                "Type: {:?}  Tick: {}  Marker: {}",
+                entry.entry_type, entry.tick, icon
+            ),
+            Style::default().fg(icon_color),
+        )),
+        Line::from(Span::styled(
+            entry.content.as_str(),
+            Style::default().fg(theme::ACCENT),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Use h to leave replay mode. Use j/k to move through the feed history.",
+            Style::default().fg(theme::DIM_GRAY),
+        )),
+    ];
+    let detail = Paragraph::new(detail_lines)
+        .block(
+            Block::default()
+                .title(Line::from(vec![Span::styled(
+                    " Replay Detail ",
+                    Style::default()
+                        .fg(theme::YELLOW)
+                        .add_modifier(Modifier::BOLD),
+                )]))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme::DARK_GRAY)),
+        )
+        .wrap(Wrap { trim: true });
+    f.render_widget(detail, chunks[1]);
 }
 
 fn draw_grid(f: &mut Frame, app: &App, area: Rect) {
@@ -848,6 +952,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let layout_label = match app.layout_mode {
         LayoutMode::Focus => "Focus",
         LayoutMode::Grid => "Grid",
+        LayoutMode::History => "History",
     };
     let selected_agent = app
         .agents
@@ -901,6 +1006,13 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(":layout ", Style::default().fg(theme::GRAY)),
+        Span::styled(
+            "h",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(":replay ", Style::default().fg(theme::GRAY)),
         Span::styled(
             "j/k",
             Style::default()

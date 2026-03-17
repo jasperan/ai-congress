@@ -125,9 +125,12 @@ async fn run_loop(
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                         KeyCode::Tab => app.toggle_layout(),
+                        KeyCode::Char('h') => app.toggle_history(),
                         KeyCode::Char('j') | KeyCode::Down => {
                             if app.layout_mode == app::LayoutMode::Focus {
                                 app.next_agent();
+                            } else if app.layout_mode == app::LayoutMode::History {
+                                app.next_history();
                             } else {
                                 app.scroll_feed_down();
                             }
@@ -135,6 +138,8 @@ async fn run_loop(
                         KeyCode::Char('k') | KeyCode::Up => {
                             if app.layout_mode == app::LayoutMode::Focus {
                                 app.prev_agent();
+                            } else if app.layout_mode == app::LayoutMode::History {
+                                app.prev_history();
                             } else {
                                 app.scroll_feed_up();
                             }

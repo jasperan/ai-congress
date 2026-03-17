@@ -22,6 +22,7 @@ pub struct App {
     pub total_tokens: u64,
     pub layout_mode: LayoutMode,
     pub selected_agent: usize,
+    pub history_index: usize,
     pub feed_scroll: u16,
     pub running: bool,
     pub simulation_result: Option<String>,
@@ -111,6 +112,7 @@ pub struct FilibusterInfo {
 pub enum LayoutMode {
     Focus,
     Grid,
+    History,
 }
 
 #[derive(Clone, Debug)]
@@ -209,6 +211,7 @@ impl App {
             total_tokens: 0,
             layout_mode: LayoutMode::Focus,
             selected_agent: 0,
+            history_index: 0,
             feed_scroll: 0,
             running: true,
             simulation_result: None,
@@ -787,6 +790,14 @@ impl App {
         self.layout_mode = match self.layout_mode {
             LayoutMode::Focus => LayoutMode::Grid,
             LayoutMode::Grid => LayoutMode::Focus,
+            LayoutMode::History => LayoutMode::Focus,
+        };
+    }
+
+    pub fn toggle_history(&mut self) {
+        self.layout_mode = match self.layout_mode {
+            LayoutMode::History => LayoutMode::Focus,
+            _ => LayoutMode::History,
         };
     }
 
@@ -816,6 +827,18 @@ impl App {
         let max = self.feed.len() as u16;
         if self.feed_scroll < max.saturating_sub(1) {
             self.feed_scroll += 1;
+        }
+    }
+
+    pub fn next_history(&mut self) {
+        if self.history_index + 1 < self.feed.len() {
+            self.history_index += 1;
+        }
+    }
+
+    pub fn prev_history(&mut self) {
+        if self.history_index > 0 {
+            self.history_index -= 1;
         }
     }
 }
