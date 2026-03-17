@@ -133,28 +133,33 @@ fn draw_focus(f: &mut Frame, app: &App, area: Rect) {
 
     draw_agent_pane_stack(f, app, h_chunks[0]);
 
-    // Right: feed (50%) + vote tracker (25%) + amendments (25%)
     let has_amendments = !app.amendments.is_empty();
     let r_chunks = if has_amendments {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(50),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
+                Constraint::Percentage(24),
+                Constraint::Percentage(36),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
             ])
             .split(h_chunks[1])
     } else {
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+            .constraints([
+                Constraint::Percentage(28),
+                Constraint::Percentage(42),
+                Constraint::Percentage(30),
+            ])
             .split(h_chunks[1])
     };
 
-    draw_discussion_feed(f, app, r_chunks[0]);
-    draw_vote_tracker(f, app, r_chunks[1]);
-    if has_amendments && r_chunks.len() > 2 {
-        draw_amendment_tracker(f, app, r_chunks[2]);
+    draw_selected_agent_detail(f, app, r_chunks[0]);
+    draw_discussion_feed(f, app, r_chunks[1]);
+    draw_vote_tracker(f, app, r_chunks[2]);
+    if has_amendments && r_chunks.len() > 3 {
+        draw_amendment_tracker(f, app, r_chunks[3]);
     }
 }
 
@@ -297,6 +302,126 @@ fn draw_single_agent_pane(
 }
 
 // ── Grid Layout ─────────────────────────────────────────────────────────────
+
+fn draw_selected_agent_detail(f: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .title(Line::from(vec![Span::styled(
+            " Selected Agent ",
+            Style::default()
+                .fg(theme::CYAN)
+                .add_modifier(Modifier::BOLD),
+        )]))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(theme::DARK_GRAY));
+
+    let Some(agent) = app.agents.get(app.selected_agent) else {
+        let p = Paragraph::new("Waiting for agents...").block(block);
+        f.render_widget(p, area);
+        return;
+    };
+
+    let stream = app.agent_streams.get(&agent.name);
+    let sentiment = app.agent_sentiment.get(&agent.name).copied().unwrap_or(0.0);
+    let sentiment_display = sentiment_indicator(sentiment);
+    let vote = app.votes.get(&agent.name);
+    let influence_count = app
+        .persuasion_edges
+        .iter()
+        .filter(|(from, to, _)| from == &agent.name || to == &agent.name)
+        .count();
+
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled(
+                format!("{} ", agent.name),
+                Style::default()
+                    .fg(theme::party_color(&agent.party))
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(
+                    "({}/{})",
+                    party_abbrev(&agent.party),
+                    state_abbrev(&agent.state)
+                ),
+                Style::default().fg(theme::DIM_GRAY),
+            ),
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                sentiment_display.0,
+                Style::default().fg(sentiment_display.1),
+            ),
+        ]),
+        Line::from(Span::styled(
+            format!(
+                "Layout focus target: {} of {}",
+                app.selected_agent + 1,
+                app.agents.len()
+            ),
+            Style::default().fg(theme::DIM_GRAY),
+        )),
+    ];
+
+    if let Some(stream) = stream {
+        let status = if stream.active { "generating" } else { "idle" };
+        lines.push(Line::from(Span::styled(
+            format!("Status: {} | latency {}ms", status, stream.latency_ms),
+            Style::default().fg(if stream.active {
+                theme::GREEN
+            } else {
+                theme::GRAY
+            }),
+        )));
+        let preview = if stream.active && !stream.tokens.is_empty() {
+            stream.tokens.as_str()
+        } else if !stream.last_response.is_empty() {
+            stream.last_response.as_str()
+        } else {
+            "(no output yet)"
+        };
+        lines.push(Line::from(Span::styled(
+            truncate(preview, area.width.saturating_sub(4) as usize),
+            Style::default().fg(theme::ACCENT),
+        )));
+    }
+
+    if let Some(vote) = vote {
+        lines.push(Line::from(Span::styled(
+            format!("Vote: {}", vote.vote.to_uppercase()),
+            Style::default()
+                .fg(theme::vote_color(&vote.vote))
+                .add_modifier(Modifier::BOLD),
+        )));
+        if !vote.rationale.is_empty() {
+            lines.push(Line::from(Span::styled(
+                truncate(&vote.rationale, area.width.saturating_sub(4) as usize),
+                Style::default().fg(theme::GRAY),
+            )));
+        }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "Vote: pending",
+            Style::default().fg(theme::YELLOW),
+        )));
+    }
+
+    if let Some(ref fb) = app.filibuster {
+        if fb.active && fb.agent_name == agent.name {
+            lines.push(Line::from(Span::styled(
+                "Filibuster active",
+                Style::default().fg(theme::RED).add_modifier(Modifier::BOLD),
+            )));
+        }
+    }
+
+    lines.push(Line::from(Span::styled(
+        format!("Influence edges: {}", influence_count),
+        Style::default().fg(Color::Magenta),
+    )));
+
+    let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    f.render_widget(paragraph, area);
+}
 
 fn draw_grid(f: &mut Frame, app: &App, area: Rect) {
     if app.agents.is_empty() {
