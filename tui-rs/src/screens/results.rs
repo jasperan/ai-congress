@@ -326,7 +326,8 @@ impl ResultsScreen {
                     .add_modifier(Modifier::BOLD),
             )));
             let short = if response.len() > 200 {
-                format!("{}...", &response[..197])
+                let end = response.char_indices().nth(197).map(|(i, _)| i).unwrap_or(response.len());
+                format!("{}...", &response[..end])
             } else {
                 response.clone()
             };

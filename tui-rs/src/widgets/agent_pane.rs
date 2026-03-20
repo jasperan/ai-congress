@@ -1,4 +1,5 @@
 use ratatui::layout::Rect;
+use textwrap;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
@@ -141,28 +142,10 @@ fn tail_lines(text: &str, max_lines: usize, line_width: usize) -> String {
     if max_lines == 0 || line_width == 0 {
         return String::new();
     }
-    let mut wrapped: Vec<String> = Vec::new();
-    for line in text.lines() {
-        if line.is_empty() {
-            wrapped.push(String::new());
-            continue;
-        }
-        let mut remaining = line;
-        while !remaining.is_empty() {
-            let take = remaining.len().min(line_width);
-            // Try to break at a space
-            let break_at = if take < remaining.len() {
-                remaining[..take]
-                    .rfind(' ')
-                    .map(|p| p + 1)
-                    .unwrap_or(take)
-            } else {
-                take
-            };
-            wrapped.push(remaining[..break_at].to_string());
-            remaining = &remaining[break_at..];
-        }
-    }
+    let wrapped: Vec<String> = textwrap::wrap(text, line_width)
+        .into_iter()
+        .map(|cow| cow.into_owned())
+        .collect();
     let start = wrapped.len().saturating_sub(max_lines);
     wrapped[start..].join("\n")
 }

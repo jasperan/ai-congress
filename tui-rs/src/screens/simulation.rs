@@ -1138,7 +1138,17 @@ impl SimulationScreen {
         self.draw_vote_tracker(f, right_chunks[chunk_idx]);
         chunk_idx += 1;
         if constraints.amendment_pct > 0 && chunk_idx < right_chunks.len() {
-            self.draw_amendment_tracker(f, right_chunks[chunk_idx]);
+            if !self.previous_bill_text.is_empty() && self.bill_text != self.previous_bill_text {
+                // Split amendment area: top half amendments, bottom half diff
+                let amend_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(right_chunks[chunk_idx]);
+                self.draw_amendment_tracker(f, amend_chunks[0]);
+                self.draw_bill_diff(f, amend_chunks[1]);
+            } else {
+                self.draw_amendment_tracker(f, right_chunks[chunk_idx]);
+            }
             chunk_idx += 1;
         }
         if constraints.show_prediction && chunk_idx < right_chunks.len() {

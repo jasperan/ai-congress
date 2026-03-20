@@ -351,6 +351,10 @@ async fn handle_screen_switch(
                 ActiveScreen::ModeSelect(mode_select::ModeSelectScreen::new(selected_models));
         }
         ScreenId::ChatDashboard(config) => {
+            // Close any existing WS chat connection before opening a new one
+            if let Some(old) = ws_chat.take() {
+                tokio::spawn(async move { old.close().await });
+            }
             // WsChatClient::connect takes base_url, appends /ws/chat internally
             match WsChatClient::connect(base_url).await {
                 Ok(mut client) => {
@@ -378,6 +382,10 @@ async fn handle_screen_switch(
             );
         }
         ScreenId::Simulation(config) => {
+            // Drop any existing simulation WS connection
+            if let Some(old) = ws_sim.take() {
+                drop(old);
+            }
             let ws_url = format!(
                 "{}/ws/simulation",
                 base_url
