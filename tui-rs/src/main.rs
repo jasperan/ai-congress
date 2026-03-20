@@ -168,6 +168,25 @@ async fn run_main_loop(
             return Ok(());
         }
 
+        // Capture help state before the closure (closure borrows app.screen mutably)
+        let show_help = app.show_help;
+        let help_screen_name = match &app.screen {
+            ActiveScreen::Splash(_) => "Splash",
+            ActiveScreen::Models(_) => "Models",
+            ActiveScreen::ModeSelect(_) => "Mode Select",
+            ActiveScreen::ChatDashboard(_) => "Chat Dashboard",
+            ActiveScreen::Simulation(_) => "Simulation",
+            ActiveScreen::Results(_) => "Results",
+        };
+        let help_bindings: &[crate::widgets::help_overlay::KeyBinding] = match &app.screen {
+            ActiveScreen::Splash(_) => crate::widgets::help_overlay::SPLASH_BINDINGS,
+            ActiveScreen::Models(_) => crate::widgets::help_overlay::MODELS_BINDINGS,
+            ActiveScreen::ModeSelect(_) => crate::widgets::help_overlay::MODE_SELECT_BINDINGS,
+            ActiveScreen::ChatDashboard(_) => crate::widgets::help_overlay::CHAT_BINDINGS,
+            ActiveScreen::Simulation(_) => crate::widgets::help_overlay::SIMULATION_BINDINGS,
+            ActiveScreen::Results(_) => crate::widgets::help_overlay::RESULTS_BINDINGS,
+        };
+
         // Render — use &mut app.screen so ModelsScreen.draw(&mut self) works
         terminal.draw(|f| {
             let area = f.area();
@@ -178,6 +197,14 @@ async fn run_main_loop(
                 ActiveScreen::ChatDashboard(s) => s.draw(f, area),
                 ActiveScreen::Simulation(s) => s.draw(f, area),
                 ActiveScreen::Results(s) => s.draw(f, area),
+            }
+            if show_help {
+                crate::widgets::help_overlay::draw_help_overlay(
+                    f,
+                    area,
+                    help_screen_name,
+                    help_bindings,
+                );
             }
         })?;
 
@@ -200,6 +227,12 @@ async fn run_main_loop(
                     && key.code == KeyCode::Char('c')
                 {
                     app.running = false;
+                    continue;
+                }
+
+                // Global: F1 toggles help overlay
+                if key.code == KeyCode::F(1) {
+                    app.show_help = !app.show_help;
                     continue;
                 }
 
