@@ -2,8 +2,9 @@ use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
@@ -142,6 +143,26 @@ pub struct WsEvent {
     pub amendments: Option<Vec<serde_json::Value>>,
     pub top_persuaders: Option<Vec<serde_json::Value>>,
     pub final_sentiment: Option<f64>,
+}
+
+// ── Phase Layout Types ───────────────────────────────────────────────────────
+
+#[derive(Debug)]
+enum PhaseLayout {
+    Introduction,
+    Committee,
+    FloorDebate,
+    Amendments,
+    FinalArguments,
+    Voting,
+}
+
+struct FocusConstraints {
+    left_pct: u16,
+    feed_pct: u16,
+    vote_pct: u16,
+    amendment_pct: u16,
+    show_prediction: bool,
 }
 
 // ── SimulationScreen ─────────────────────────────────────────────────────────
@@ -934,6 +955,35 @@ impl SimulationScreen {
             LayoutMode::Focus => self.draw_focus(f, chunks[1]),
             LayoutMode::Grid => self.draw_grid(f, chunks[1]),
         }
+
+        // Overlays (drawn last, on top)
+        if self.show_persuasion_graph {
+            let nodes: Vec<crate::widgets::persuasion_graph::GraphNode> = self.agents.iter()
+                .map(|a| crate::widgets::persuasion_graph::GraphNode {
+                    name: a.name.clone(),
+                    party: a.party.clone(),
+                })
+                .collect();
+            let edges: Vec<crate::widgets::persuasion_graph::GraphEdge> = self.persuasion_edges.iter()
+                .filter_map(|(from, to, strength)| {
+                    let from_idx = self.agents.iter().position(|a| &a.name == from)?;
+                    let to_idx = self.agents.iter().position(|a| &a.name == to)?;
+                    Some(crate::widgets::persuasion_graph::GraphEdge {
+                        from: from_idx,
+                        to: to_idx,
+                        strength: *strength,
+                    })
+                })
+                .collect();
+            let overlay = centered_rect(70, 70, area);
+            crate::widgets::persuasion_graph::draw_persuasion_graph(f, overlay, &nodes, &edges);
+        }
+
+        if self.show_inspector {
+            if let Some(ref agent_name) = self.inspector_agent {
+                self.draw_inspector(f, area, agent_name);
+            }
+        }
     }
 
     // ── Header ───────────────────────────────────────────────────────────────
@@ -1018,36 +1068,150 @@ impl SimulationScreen {
 
     // ── Focus Layout ─────────────────────────────────────────────────────────
 
+    fn phase_layout(&self) -> PhaseLayout {
+        match self.phase.as_str() {
+            "INTRODUCTION" => PhaseLayout::Introduction,
+            "COMMITTEE" => PhaseLayout::Committee,
+            "FLOOR_DEBATE" => PhaseLayout::FloorDebate,
+            "AMENDMENTS" => PhaseLayout::Amendments,
+            "FINAL_ARGUMENTS" => PhaseLayout::FinalArguments,
+            "VOTING" => PhaseLayout::Voting,
+            _ => PhaseLayout::Introduction,
+        }
+    }
+
+    fn focus_constraints(&self) -> FocusConstraints {
+        match self.phase_layout() {
+            PhaseLayout::Introduction => FocusConstraints {
+                left_pct: 65, feed_pct: 70, vote_pct: 30, amendment_pct: 0, show_prediction: false,
+            },
+            PhaseLayout::Committee => FocusConstraints {
+                left_pct: 50, feed_pct: 55, vote_pct: 25, amendment_pct: 20, show_prediction: false,
+            },
+            PhaseLayout::FloorDebate => FocusConstraints {
+                left_pct: 45, feed_pct: 70, vote_pct: 30, amendment_pct: 0, show_prediction: false,
+            },
+            PhaseLayout::Amendments => FocusConstraints {
+                left_pct: 45, feed_pct: 35, vote_pct: 25, amendment_pct: 40, show_prediction: false,
+            },
+            PhaseLayout::FinalArguments => FocusConstraints {
+                left_pct: 50, feed_pct: 45, vote_pct: 25, amendment_pct: 0, show_prediction: true,
+            },
+            PhaseLayout::Voting => FocusConstraints {
+                left_pct: 25, feed_pct: 30, vote_pct: 50, amendment_pct: 0, show_prediction: true,
+            },
+        }
+    }
+
     fn draw_focus(&self, f: &mut Frame, area: Rect) {
-        let h_chunks = Layout::default()
+        let constraints = self.focus_constraints();
+
+        let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+            .constraints([
+                Constraint::Percentage(constraints.left_pct),
+                Constraint::Percentage(100 - constraints.left_pct),
+            ])
             .split(area);
 
-        self.draw_agent_pane_stack(f, h_chunks[0]);
+        self.draw_agent_pane_stack(f, main_chunks[0]);
 
-        let has_amendments = !self.amendments.is_empty();
-        let r_chunks = if has_amendments {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(25),
-                    Constraint::Percentage(25),
-                ])
-                .split(h_chunks[1])
-        } else {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-                .split(h_chunks[1])
-        };
-
-        self.draw_discussion_feed(f, r_chunks[0]);
-        self.draw_vote_tracker(f, r_chunks[1]);
-        if has_amendments && r_chunks.len() > 2 {
-            self.draw_amendment_tracker(f, r_chunks[2]);
+        // Right panel: build constraints dynamically
+        let mut right_constraints = vec![];
+        right_constraints.push(Constraint::Percentage(constraints.feed_pct));
+        right_constraints.push(Constraint::Percentage(constraints.vote_pct));
+        if constraints.amendment_pct > 0 {
+            right_constraints.push(Constraint::Percentage(constraints.amendment_pct));
         }
+        if constraints.show_prediction {
+            right_constraints.push(Constraint::Length(4)); // prediction gauge
+        }
+
+        let right_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(right_constraints)
+            .split(main_chunks[1]);
+
+        let mut chunk_idx = 0;
+        self.draw_discussion_feed(f, right_chunks[chunk_idx]);
+        chunk_idx += 1;
+        self.draw_vote_tracker(f, right_chunks[chunk_idx]);
+        chunk_idx += 1;
+        if constraints.amendment_pct > 0 && chunk_idx < right_chunks.len() {
+            self.draw_amendment_tracker(f, right_chunks[chunk_idx]);
+            chunk_idx += 1;
+        }
+        if constraints.show_prediction && chunk_idx < right_chunks.len() {
+            self.draw_prediction_gauge(f, right_chunks[chunk_idx]);
+        }
+    }
+
+    fn draw_prediction_gauge(&self, f: &mut Frame, area: Rect) {
+        let block = Block::default()
+            .title(" Prediction ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::YELLOW));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+
+        if inner.width < 10 || inner.height == 0 {
+            return;
+        }
+
+        let yea_score: f64 = self.agent_sentiment.values().filter(|&&s| s > 0.0).map(|s| s.abs()).sum();
+        let nay_score: f64 = self.agent_sentiment.values().filter(|&&s| s < 0.0).map(|s| s.abs()).sum();
+        let total = yea_score + nay_score;
+        let yea_pct = if total > 0.0 { yea_score / total } else { 0.5 };
+
+        let bar_width = inner.width.saturating_sub(2) as usize;
+        let yea_chars = (yea_pct * bar_width as f64).round() as usize;
+        let nay_chars = bar_width.saturating_sub(yea_chars);
+
+        let bar = Line::from(vec![
+            Span::styled("█".repeat(yea_chars), Style::default().fg(theme::GREEN)),
+            Span::styled("█".repeat(nay_chars), Style::default().fg(theme::RED)),
+        ]);
+        let label = Line::from(vec![
+            Span::styled(format!(" YEA {:.0}%", yea_pct * 100.0), Style::default().fg(theme::GREEN)),
+            Span::styled(" │ ", Style::default().fg(theme::DARK_GRAY)),
+            Span::styled(format!("NAY {:.0}% ", (1.0 - yea_pct) * 100.0), Style::default().fg(theme::RED)),
+        ]);
+
+        let para = Paragraph::new(vec![bar, label]).alignment(Alignment::Center);
+        f.render_widget(para, inner);
+    }
+
+    fn draw_bill_diff(&self, f: &mut Frame, area: Rect) {
+        let block = Block::default()
+            .title(" Bill Text Changes ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::CYAN));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+
+        if self.previous_bill_text.is_empty() || self.bill_text.is_empty() || inner.height == 0 {
+            return;
+        }
+
+        let diff = TextDiff::from_lines(&self.previous_bill_text, &self.bill_text);
+        let lines: Vec<Line> = diff
+            .iter_all_changes()
+            .take(inner.height as usize)
+            .map(|change| {
+                let (sign, color) = match change.tag() {
+                    ChangeTag::Delete => ("-", theme::RED),
+                    ChangeTag::Insert => ("+", theme::GREEN),
+                    ChangeTag::Equal => (" ", theme::GRAY),
+                };
+                Line::from(Span::styled(
+                    format!("{} {}", sign, change.value().trim_end()),
+                    Style::default().fg(color),
+                ))
+            })
+            .collect();
+
+        let para = Paragraph::new(lines);
+        f.render_widget(para, inner);
     }
 
     fn draw_agent_pane_stack(&self, f: &mut Frame, area: Rect) {
@@ -1687,6 +1851,151 @@ impl SimulationScreen {
         f.render_widget(paragraph, area);
     }
 
+    fn draw_inspector(&self, f: &mut Frame, area: Rect, agent_name: &str) {
+        let overlay = centered_rect(80, 80, area);
+
+        // Clear background
+        f.render_widget(ratatui::widgets::Clear, overlay);
+        let bg = Block::default().style(Style::default().bg(Color::Rgb(15, 15, 20)));
+        f.render_widget(bg, overlay);
+
+        let block = Block::default()
+            .title(format!(" Agent: {} ", agent_name))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::CYAN));
+        let inner = block.inner(overlay);
+        f.render_widget(block, overlay);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),   // sentiment sparkline
+                Constraint::Length(5),   // influence map
+                Constraint::Min(5),      // response history
+            ])
+            .split(inner);
+
+        // 1. Sentiment timeline
+        if let Some(history) = self.sentiment_history.get(agent_name) {
+            let history_vec: Vec<f64> = history.iter().copied().collect();
+            if !history_vec.is_empty() {
+                let sparkline = crate::widgets::agent_pane::render_sentiment_sparkline(
+                    &history_vec,
+                    chunks[0].width.saturating_sub(12) as usize,
+                );
+                let current = history_vec.last().copied().unwrap_or(0.0);
+                let label = format!("Sentiment: {:.2} ", current);
+                let lines = vec![
+                    Line::from(vec![
+                        Span::styled(label, Style::default().fg(theme::DIM_GRAY)),
+                    ]),
+                    sparkline,
+                ];
+                let block = Block::default()
+                    .title(" Sentiment Timeline ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme::DARK_GRAY));
+                let para = Paragraph::new(lines).block(block);
+                f.render_widget(para, chunks[0]);
+            }
+        }
+
+        // 2. Influence map
+        {
+            let incoming: Vec<_> = self.persuasion_edges.iter()
+                .filter(|(_, target, _)| target == agent_name)
+                .collect();
+            let outgoing: Vec<_> = self.persuasion_edges.iter()
+                .filter(|(source, _, _)| source == agent_name)
+                .collect();
+
+            let mut lines = Vec::new();
+            if !incoming.is_empty() {
+                lines.push(Line::from(vec![
+                    Span::styled("← Influenced by: ", Style::default().fg(theme::DIM_GRAY)),
+                ]));
+                let spans: Vec<Span> = incoming.iter().take(5).map(|(from, _, strength)| {
+                    let last = from.split_whitespace().last().unwrap_or(from.as_str());
+                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::ACCENT))
+                }).collect();
+                lines.push(Line::from(spans));
+            }
+            if !outgoing.is_empty() {
+                lines.push(Line::from(vec![
+                    Span::styled("→ Influenced: ", Style::default().fg(theme::DIM_GRAY)),
+                ]));
+                let spans: Vec<Span> = outgoing.iter().take(5).map(|(_, to, strength)| {
+                    let last = to.split_whitespace().last().unwrap_or(to.as_str());
+                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::PURPLE))
+                }).collect();
+                lines.push(Line::from(spans));
+            }
+            if lines.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    "No influence data yet",
+                    Style::default().fg(theme::DIM_GRAY),
+                )));
+            }
+
+            let block = Block::default()
+                .title(" Influence Map ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme::DARK_GRAY));
+            let para = Paragraph::new(lines).block(block);
+            f.render_widget(para, chunks[1]);
+        }
+
+        // 3. Response history
+        {
+            let speeches: Vec<&FeedEntry> = self.feed.iter()
+                .filter(|e| e.agent_name == agent_name)
+                .collect();
+
+            let visible_height = chunks[2].height.saturating_sub(2) as usize;
+            let start = if speeches.len() <= visible_height {
+                0
+            } else {
+                speeches.len()
+                    .saturating_sub(visible_height)
+                    .min(self.inspector_scroll as usize)
+            };
+
+            let lines: Vec<Line> = speeches.iter()
+                .skip(start)
+                .take(visible_height)
+                .map(|entry| {
+                    let icon = match entry.entry_type {
+                        FeedEntryType::Speech => ">>",
+                        FeedEntryType::Vote => "##",
+                        FeedEntryType::Lobby => "$$",
+                        FeedEntryType::Filibuster => "!!",
+                        FeedEntryType::Amendment => "&&",
+                        FeedEntryType::DirectAddress => "->",
+                        FeedEntryType::System => "**",
+                    };
+                    let max_width = chunks[2].width.saturating_sub(15) as usize;
+                    let content = if entry.content.len() > max_width {
+                        format!("{}...", &entry.content[..max_width.saturating_sub(3)])
+                    } else {
+                        entry.content.clone()
+                    };
+                    Line::from(vec![
+                        Span::styled(format!("[T{:>3}] ", entry.tick), Style::default().fg(theme::DIM_GRAY)),
+                        Span::styled(format!("{} ", icon), Style::default().fg(theme::ACCENT)),
+                        Span::styled(content, Style::default().fg(theme::GRAY)),
+                    ])
+                })
+                .collect();
+
+            let block = Block::default()
+                .title(format!(" History ({} entries) ", speeches.len()))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme::DARK_GRAY));
+            let para = Paragraph::new(lines).block(block);
+            f.render_widget(para, chunks[2]);
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     fn compute_tps(&self) -> f64 {
@@ -1831,6 +2140,25 @@ fn state_abbrev(state: &str) -> String {
         _ => return state[..2.min(state.len())].to_uppercase(),
     }
     .to_string()
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
 
 fn tail_lines(text: &str, max_lines: usize, line_width: usize) -> String {
