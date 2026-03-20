@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "38b396e5-5314-4ee1-bfcc-6befbfae8e9b",
+  "sessionFile": "/home/ubuntu/.pi/agent/sessions/--home-ubuntu-git-personal--/2026-03-17T02-44-07-072Z_a7ef1aa6-f15a-417b-b265-f8f2fa6acb89/f6221be2/run-1/2026-03-17T03-07-52-857Z_38b396e5-5314-4ee1-bfcc-6befbfae8e9b.jsonl",
+  "cwd": "/home/ubuntu/git/personal/ai-congress/tui-rs",
+  "ignoreLegacyPiSessionEntries": true,
+  "legacyMigration": {
+    "performedAt": "2026-03-17T03:07:52.876Z",
+    "importedLegacyEntries": false,
+    "legacyStateEntryCount": 0,
+    "legacyUsageEntryCount": 0,
+    "note": "Legacy suggester-state/suggester-usage pi session entries were imported once into extension-owned storage and are ignored afterwards."
+  }
+}

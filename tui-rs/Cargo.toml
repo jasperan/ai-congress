@@ -20,3 +20,7 @@ chrono = "0.4"
 unicode-width = "0.2"
 url = "2"
 clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+textwrap = "0.16"
+similar = "2"
+tui-input = "0.10"
