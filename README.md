@@ -12,6 +12,18 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 
 ## Screenshots
 
+### Terminal UI (Rust)
+
+| Splash Screen | Model Picker | Mode Select |
+|:-:|:-:|:-:|
+| ![Splash](img/tui-splash.png) | ![Models](img/tui-models.png) | ![Mode Select](img/tui-mode-select.png) |
+
+| Simulation View | Help Overlay |
+|:-:|:-:|
+| ![Simulation](img/tui-simulation.png) | ![Help](img/tui-help-overlay.png) |
+
+### Web Interface
+
 | Model Selection | Deliberation | Results |
 |:-:|:-:|:-:|
 | ![10 Models Selected](img/ai-congress-10-models-selected.png) | ![Deliberating](img/ai-congress-deliberating.png) | ![10 Agents Result](img/ai-congress-10-agents-result.png) |
@@ -56,6 +68,7 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 - Python 3.11+
 - Ollama installed and running (`ollama serve`)
 - Node.js 18+ (for frontend)
+- Rust toolchain (for TUI, optional)
 
 ### Installation
 
@@ -81,6 +94,37 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 python run_server.py          # Backend at :8000
 cd frontend && npm run dev    # Frontend at :3000
 ```
+
+#### Terminal UI (Rust)
+
+A single Rust binary that handles both interactive chat/swarm sessions and congressional simulation viewing. Built with ratatui.
+
+```bash
+# Prerequisites: Rust toolchain (cargo)
+cd tui-rs && cargo build --release
+
+# Launch the full TUI (splash -> models -> configure -> session)
+./tui-rs/target/release/congress-tui --server http://localhost:8000
+
+# Direct simulation launch (legacy mode, skips splash)
+./tui-rs/target/release/congress-tui --simulation \
+  --topic "Should AI systems be regulated by federal law?" \
+  --agents 5 --ticks 50 --model qwen3.5:9b \
+  --server http://localhost:8000
+```
+
+**TUI Features:**
+
+- **Splash screen** with animated ASCII banner and backend health check
+- **Model picker** with filtering (`/`), multi-select (`Space`), weight/size/backend display
+- **Mode select** screen: choose Chat/Swarm or Congressional Simulation, configure all parameters
+- **Chat dashboard**: Focus (4 stacked panes) and Grid (5x2) layouts, live token streaming, voting panel with confidence gauge, inline follow-up prompts
+- **Simulation viewer**: phase-adaptive layouts that morph across 6 congressional phases, per-agent sentiment sparklines, amendment tracker with bill diff, filibuster alerts, live persuasion network graph (`g` to toggle), vote prediction gauge
+- **Agent inspector** (`Enter`): full-screen overlay with sentiment timeline, influence map, and response history
+- **Help overlay** (`F1`): context-sensitive keybindings per screen
+- **Export** (`e` on results): save transcripts as markdown or JSON
+
+**Key bindings (global):** `F1` help, `Ctrl+C` quit. **Per-screen:** `Tab` toggle layout, `j/k` navigate, `Space` select, `Enter` proceed/inspect, `q/Esc` back.
 
 #### Enhanced Mode (API)
 
