@@ -805,6 +805,17 @@ impl SimulationScreen {
         }
     }
 
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn force_complete(&mut self, msg: String) {
+        self.running = false;
+        if self.simulation_result.is_none() {
+            self.simulation_result = Some(msg);
+        }
+    }
+
     // ── Key Handling ─────────────────────────────────────────────────────────
 
     pub fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> super::Action {

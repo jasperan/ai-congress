@@ -406,6 +406,10 @@ impl ChatDashboardScreen {
         Action::None
     }
 
+    pub fn is_complete(&self) -> bool {
+        self.status == ChatStatus::Complete || self.status == ChatStatus::Error
+    }
+
     // ── Build SessionResult ──────────────────────────────────────────────────
 
     pub fn build_results(&self) -> SessionResult {
