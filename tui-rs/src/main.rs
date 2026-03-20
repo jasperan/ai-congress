@@ -1,6 +1,10 @@
+mod api;
 mod app;
+mod screens;
+mod session;
 mod theme;
 mod ui;
+mod widgets;
 mod ws;
 
 use std::io;
