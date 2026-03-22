@@ -4,12 +4,12 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "8100:8100"
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
     volumes:
       - ./config:/app/config
-  
+
   frontend:
     build: ./frontend
     ports:

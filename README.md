@@ -4,7 +4,7 @@
 
 ![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
 ![Reasoning](https://img.shields.io/badge/Reasoning-CoT%20%7C%20ReAct-blue?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Ollama](https://img.shields.io/badge/backend-Ollama-black?style=for-the-badge)
 
@@ -65,7 +65,7 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.10+
 - Ollama installed and running (`ollama serve`)
 - Node.js 18+ (for frontend)
 - Rust toolchain (for TUI, optional)
@@ -91,7 +91,7 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 #### Web Interface
 
 ```bash
-python run_server.py          # Backend at :8000
+python run_server.py          # Backend at :8100
 cd frontend && npm run dev    # Frontend at :3000
 ```
 

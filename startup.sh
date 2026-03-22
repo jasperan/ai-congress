@@ -5,6 +5,7 @@ echo "🚀 Starting AI Congress Setup..."
 # Install Python dependencies
 echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt
+pip install -e .
 
 # Install frontend dependencies
 echo "🎨 Installing frontend dependencies..."
@@ -53,9 +54,9 @@ if [[ $OLLAMA_URL == *"localhost"* ]] || [[ $OLLAMA_URL == *"127.0.0.1"* ]]; the
     echo "🆕 Pulling lightweight versions of new models..."
     pull_model "deepseek-r1:1.5b"
     pull_model "qwen3:0.6b"
-    
+
     echo "🎨 Stable Diffusion will be downloaded from Hugging Face on first use..."
-    
+
     # Setup Whisper for voice input
     setup_whisper
 else
@@ -65,6 +66,6 @@ else
 fi
 
 echo "✅ Setup complete! Run the following:"
-echo "  Backend: python run_server.py   (verbose uvicorn with detailed logging)"
-echo "  Backend (simple): uvicorn src.ai_congress.api.main:app --reload"
+echo "  Backend: python run_server.py   (verbose uvicorn at :8100)"
+echo "  Backend (simple): uvicorn src.ai_congress.api.main:app --reload --port 8100"
 echo "  Frontend: cd frontend && npm run dev"
