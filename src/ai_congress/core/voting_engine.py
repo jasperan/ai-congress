@@ -3,6 +3,7 @@ Voting Engine - Implements ensemble decision-making algorithms
 """
 from typing import List, Dict, Tuple
 from collections import Counter
+import time
 import numpy as np
 import logging
 
@@ -12,12 +13,14 @@ logger = logging.getLogger(__name__)
 class VotingEngine:
     """Ensemble voting algorithms for LLM swarm decisions"""
 
+    MAX_HISTORY = 1000
+
     def __init__(self):
         self.voting_history = []
 
     def weighted_majority_vote(
-        self, 
-        responses: List[str], 
+        self,
+        responses: List[str],
         weights: List[float],
         model_names: List[str] = None
     ) -> Tuple[str, float, Dict]:
@@ -67,10 +70,21 @@ class VotingEngine:
 
         logger.info(f"Weighted vote winner: {winning_response[:50]}... (confidence: {confidence:.2f})")
 
+        # Record in voting history (bounded)
+        self.voting_history.append({
+            "timestamp": time.time(),
+            "winner": winning_response,
+            "confidence": confidence,
+            "num_responses": len(responses),
+            "algorithm": "weighted_majority",
+        })
+        if len(self.voting_history) > self.MAX_HISTORY:
+            self.voting_history = self.voting_history[-self.MAX_HISTORY:]
+
         return winning_response, confidence, vote_details
 
     def majority_vote(
-        self, 
+        self,
         responses: List[str],
         model_names: List[str] = None
     ) -> Tuple[str, float, Dict]:

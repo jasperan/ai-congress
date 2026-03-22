@@ -593,28 +593,27 @@ async def websocket_chat(websocket: WebSocket):
                     continue
 
                 # Define callback to send live status updates
-                def status_callback(event_type, entity_name, content=None, full_response=None):
+                async def status_callback(event_type, entity_name, content=None, full_response=None):
                     if event_type == 'init':
-                        # Send initial status table
                         status_list = [{'name': entity_name, 'status': content}]
-                        websocket.send_json({
+                        await websocket.send_json({
                             'type': 'status_init',
                             'personalities': status_list
                         })
                     elif event_type == 'start':
-                        websocket.send_json({
+                        await websocket.send_json({
                             'type': 'status_update',
                             'name': entity_name,
                             'status': 'Generating...'
                         })
                     elif event_type == 'chunk':
-                        websocket.send_json({
+                        await websocket.send_json({
                             'type': 'chunk',
                             'name': entity_name,
                             'content': content
                         })
                     elif event_type == 'complete':
-                        websocket.send_json({
+                        await websocket.send_json({
                             'type': 'status_update',
                             'name': entity_name,
                             'status': 'Complete',

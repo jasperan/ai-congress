@@ -3,6 +3,7 @@ Swarm Orchestrator - Coordinates concurrent LLM requests and aggregates response
 """
 import asyncio
 import os
+import re
 from typing import List, Dict, Optional
 from .voting_engine import VotingEngine
 from .model_registry import ModelRegistry
@@ -227,7 +228,6 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             content = response['message']['content'].strip()
 
             # Extract float from response
-            import re
             match = re.search(r'(\d*\.?\d+)', content)
             if match:
                 score = float(match.group(1))
@@ -730,7 +730,8 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                 messages.extend(history)
             messages.append({"role": "user", "content": prompt})
 
-            entity_callback = lambda type, name, content, full: update_callback(type, personality['name'], content, full) if update_callback else None
+            pname = personality['name']
+            entity_callback = (lambda type, name, content, full, _pname=pname: update_callback(type, _pname, content, full)) if update_callback else None
 
             return await self.query_model(
                 base_model,
@@ -792,7 +793,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
 
         # Vote on best response
         texts = [r['response'] for r in successful]
-        personality_names = [p['name'] for p in personalities[:len(successful)]]  # Match successful order
+        personality_names = [r.get('personality_name', f'Personality {i+1}') for i, r in enumerate(successful)]
 
         debug_action("VOTING", f"Personality Swarm ({len(successful)} responses)", "Aggregating responses with equal weights", config.logging.verbosity)
 

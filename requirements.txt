@@ -20,6 +20,7 @@ aiocache==0.12.2
 rich==13.8.1
 click==8.1.7
 typer==0.12.5
+questionary==2.0.1
 
 # Database
 sqlalchemy==2.0.35
