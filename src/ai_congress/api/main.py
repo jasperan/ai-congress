@@ -886,6 +886,32 @@ async def health_check():
     return {"status": "healthy"}
 
 
+# ELO Performance Tracker (lazy init)
+_elo_tracker = None
+
+
+def get_elo_tracker():
+    global _elo_tracker
+    if _elo_tracker is None:
+        from ..core.learning.elo_tracker import ELOTracker
+        _elo_tracker = ELOTracker()
+    return _elo_tracker
+
+
+@app.get("/api/performance")
+async def get_performance():
+    """Return ELO leaderboard and model performance stats."""
+    try:
+        tracker = get_elo_tracker()
+        return {
+            "leaderboard": tracker.get_leaderboard(),
+            "match_count": len(tracker.match_history),
+        }
+    except Exception as e:
+        logger.error(f"Performance endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== NEW ENDPOINTS ====================
 
 # Voice Transcription
