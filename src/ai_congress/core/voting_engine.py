@@ -2,9 +2,7 @@
 Voting Engine - Implements ensemble decision-making algorithms
 """
 from typing import List, Dict, Tuple
-from collections import Counter
 import time
-import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)

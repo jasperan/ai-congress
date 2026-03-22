@@ -466,6 +466,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                 "responses": all_responses,
                 "final_answer": result.winner,
                 "confidence": result.consensus,
+                "semantic_confidence": result.consensus,
                 "semantic_vote": result.to_dict(),
                 "models_used": model_names,
                 "weights": weights,
@@ -490,6 +491,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             "responses": all_responses,
             "final_answer": debate_result.winner,
             "confidence": debate_result.consensus,
+            "semantic_confidence": debate_result.consensus,
             "semantic_vote": debate_result.to_dict(),
             "models_used": model_names,
             "weights": weights,
@@ -651,43 +653,6 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             'successful_queries': len(successful),
             'weights': weights
         }
-
-    async def stream_swarm_response(
-        self,
-        models: List[str],
-        prompt: str,
-        websocket = None
-    ):
-        """
-        Stream responses from swarm in real-time
-        Useful for WebSocket connections
-        """
-        async def stream_model(model_name: str):
-            try:
-                messages = [{'role': 'user', 'content': prompt}]
-
-                async for chunk in await self.ollama_client.chat(
-                    model=model_name,
-                    messages=messages,
-                    stream=True
-                ):
-                    content = chunk['message']['content']
-
-                    if websocket:
-                        await websocket.send_json({
-                            'type': 'model_chunk',
-                            'model': model_name,
-                            'content': content
-                        })
-
-                    yield content
-
-            except Exception as e:
-                logger.error(f"Streaming error for {model_name}: {e}")
-
-        # Stream from all models concurrently
-        # Implementation depends on specific WebSocket library
-        pass
 
     async def personality_swarm(
         self,

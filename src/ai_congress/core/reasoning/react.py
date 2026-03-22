@@ -115,12 +115,10 @@ Stop when you have the Final Answer.
 """
         messages = [{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': query}]
         max_steps = 5
-        full_conversation = f"{system_prompt}\nQuestion: {query}\n"
 
         for i in range(max_steps):
             yield f"\n--- Step {i+1} ---\nAgent: "
 
-            response_chunk = ""
             # In updated ollama client, we might need to handle context management manually or just keep appending messages
             # For simplicity, we just append to the prompt string if the model supports it,
             # OR we maintain the messages list.

@@ -152,11 +152,6 @@ class PersonalityCreate(BaseModel):
     system_prompt: str
 
 
-class PersonalityList(BaseModel):
-    name: str
-    count: int
-
-
 class ChatRequest(BaseModel):
     prompt: str
     models: List[str]
