@@ -227,7 +227,8 @@ SKILLS_EXECUTION_SUMMARY.md
 
 # Generated documentation
 docs/plans/
-docs/
+docs/*
+!docs/slides/
 *_FEATURES.md
 *_ENHANCEMENTS.md
 *_REPORT.md

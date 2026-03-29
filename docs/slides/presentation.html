@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Congress -- Autonomous LLM Multi-Agent Deliberation</title>
+
+    <!-- Fonts: Fraunces (display) + Work Sans (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* ===========================================
+           CSS CUSTOM PROPERTIES (VINTAGE EDITORIAL)
+           =========================================== */
+        :root {
+            /* Colors */
+            --bg-cream: #f5f3ee;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555;
+            --accent-warm: #e8d4c0;
+            --accent-navy: #1e3a5f;
+            --accent-warm-light: #f3ebe2;
+            --accent-navy-light: rgba(30, 58, 95, 0.08);
+            --border-color: #d4cfc7;
+            --code-bg: #eae6de;
+
+            /* Typography */
+            --font-display: 'Fraunces', serif;
+            --font-body: 'Work Sans', sans-serif;
+            --title-size: clamp(2rem, 6vw, 5rem);
+            --subtitle-size: clamp(0.875rem, 2vw, 1.25rem);
+            --body-size: clamp(0.75rem, 1.2vw, 1rem);
+
+            /* Spacing */
+            --slide-padding: clamp(1.5rem, 4vw, 4rem);
+            --content-gap: clamp(1rem, 2vw, 2rem);
+
+            /* Animation */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --duration-normal: 0.6s;
+        }
+
+        /* ===========================================
+           RESET
+           =========================================== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* ===========================================
+           VIEWPORT FITTING: MANDATORY BASE STYLES
+           Include this ENTIRE file in every presentation.
+           These styles ensure slides fit exactly in the viewport.
+           =========================================== */
+
+        /* 1. Lock html/body to viewport */
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        /* 2. Each slide = exact viewport height */
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* 3. Content container with flex for centering */
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-height: 100%;
+            overflow: hidden;
+            padding: var(--slide-padding);
+        }
+
+        /* 4. ALL typography uses clamp() for responsive scaling */
+        :root {
+            --title-size: clamp(1.5rem, 5vw, 4rem);
+            --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+            --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+            --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+            --small-size: clamp(0.65rem, 1vw, 0.875rem);
+            --slide-padding: clamp(1rem, 4vw, 4rem);
+            --content-gap: clamp(0.5rem, 2vw, 2rem);
+            --element-gap: clamp(0.25rem, 1vw, 1rem);
+        }
+
+        /* 5. Cards/containers use viewport-relative max sizes */
+        .card, .container, .content-box {
+            max-width: min(90vw, 1000px);
+            max-height: min(80vh, 700px);
+        }
+
+        /* 6. Lists auto-scale with viewport */
+        .feature-list, .bullet-list {
+            gap: clamp(0.4rem, 1vh, 1rem);
+        }
+
+        .feature-list li, .bullet-list li {
+            font-size: var(--body-size);
+            line-height: 1.4;
+        }
+
+        /* 7. Grids adapt to available space */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+        }
+
+        /* 8. Images constrained to viewport */
+        img, .image-container {
+            max-width: 100%;
+            max-height: min(50vh, 400px);
+            object-fit: contain;
+        }
+
+        /* ===========================================
+           RESPONSIVE BREAKPOINTS
+           Aggressive scaling for smaller viewports
+           =========================================== */
+
+        /* Short viewports (< 700px height) */
+        @media (max-height: 700px) {
+            :root {
+                --slide-padding: clamp(0.75rem, 3vw, 2rem);
+                --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+                --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+                --h2-size: clamp(1rem, 3vw, 1.75rem);
+            }
+        }
+
+        /* Very short viewports (< 600px height) */
+        @media (max-height: 600px) {
+            :root {
+                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+                --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+                --title-size: clamp(1.1rem, 4vw, 2rem);
+                --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+            }
+
+            .nav-dots, .keyboard-hint, .decorative {
+                display: none;
+            }
+        }
+
+        /* Extremely short (landscape phones, < 500px height) */
+        @media (max-height: 500px) {
+            :root {
+                --slide-padding: clamp(0.4rem, 2vw, 1rem);
+                --title-size: clamp(1rem, 3.5vw, 1.5rem);
+                --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+                --body-size: clamp(0.65rem, 1vw, 0.85rem);
+            }
+        }
+
+        /* Narrow viewports (< 600px width) */
+        @media (max-width: 600px) {
+            :root {
+                --title-size: clamp(1.25rem, 7vw, 2.5rem);
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===========================================
+           REDUCED MOTION
+           Respect user preferences
+           =========================================== */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+
+            html {
+                scroll-behavior: auto;
+            }
+        }
+
+        /* ===========================================
+           VINTAGE EDITORIAL THEME
+           =========================================== */
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-cream);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .slide {
+            background: var(--bg-cream);
+        }
+
+        h1, h2, h3 {
+            font-family: var(--font-display);
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        h1 { font-size: var(--title-size); }
+        h2 { font-size: var(--h2-size); color: var(--text-primary); }
+        h3 { font-size: var(--h3-size); }
+
+        p, li {
+            font-family: var(--font-body);
+            font-size: var(--body-size);
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ===========================================
+           ANIMATIONS
+           =========================================== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity var(--duration-normal) var(--ease-out-expo),
+                        transform var(--duration-normal) var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-left {
+            opacity: 0;
+            transform: translateX(-50px);
+            transition: opacity 0.6s var(--ease-out-expo),
+                        transform 0.6s var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal-left {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .reveal-scale {
+            opacity: 0;
+            transform: scale(0.9);
+            transition: opacity 0.6s var(--ease-out-expo),
+                        transform 0.6s var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal-scale {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Stagger children */
+        .reveal:nth-child(1) { transition-delay: 0.1s; }
+        .reveal:nth-child(2) { transition-delay: 0.2s; }
+        .reveal:nth-child(3) { transition-delay: 0.3s; }
+        .reveal:nth-child(4) { transition-delay: 0.4s; }
+        .reveal:nth-child(5) { transition-delay: 0.5s; }
+        .reveal:nth-child(6) { transition-delay: 0.6s; }
+
+        .reveal-left:nth-child(1) { transition-delay: 0.1s; }
+        .reveal-left:nth-child(2) { transition-delay: 0.2s; }
+        .reveal-left:nth-child(3) { transition-delay: 0.3s; }
+        .reveal-left:nth-child(4) { transition-delay: 0.4s; }
+
+        /* ===========================================
+           PROGRESS BAR
+           =========================================== */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: var(--accent-navy);
+            z-index: 1000;
+            transition: width 0.3s var(--ease-out-expo);
+        }
+
+        /* ===========================================
+           SLIDE COUNTER
+           =========================================== */
+        .slide-counter {
+            position: fixed;
+            top: clamp(0.5rem, 2vw, 1.5rem);
+            right: clamp(0.5rem, 2vw, 1.5rem);
+            font-family: var(--font-body);
+            font-size: var(--small-size);
+            color: var(--text-secondary);
+            z-index: 999;
+            background: rgba(245, 243, 238, 0.9);
+            padding: 0.25em 0.6em;
+            border-radius: 3px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* ===========================================
+           NAV DOTS
+           =========================================== */
+        .nav-dots {
+            position: fixed;
+            right: clamp(0.5rem, 1.5vw, 1rem);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 999;
+        }
+
+        .nav-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border-color);
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s var(--ease-out-expo);
+            padding: 0;
+        }
+
+        .nav-dot.active {
+            background: var(--accent-navy);
+            transform: scale(1.4);
+        }
+
+        /* ===========================================
+           GEOMETRIC DECORATIONS (Editorial Signature)
+           =========================================== */
+        .geo-circle {
+            position: absolute;
+            border: 2px solid var(--accent-warm);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .geo-line {
+            position: absolute;
+            background: var(--accent-warm);
+            pointer-events: none;
+        }
+
+        .geo-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--accent-navy);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* ===========================================
+           TITLE SLIDE
+           =========================================== */
+        .title-slide {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .title-slide .slide-content {
+            align-items: center;
+            max-width: min(90vw, 800px);
+        }
+
+        .title-slide h1 {
+            font-size: clamp(2rem, 7vw, 5.5rem);
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            margin-bottom: var(--element-gap);
+            color: var(--text-primary);
+        }
+
+        .title-slide .subtitle {
+            font-size: clamp(0.85rem, 2vw, 1.3rem);
+            color: var(--text-secondary);
+            font-weight: 400;
+            max-width: 600px;
+        }
+
+        .title-slide .tagline {
+            display: inline-block;
+            margin-top: var(--content-gap);
+            padding: 0.4em 1.2em;
+            border: 2px solid var(--accent-navy);
+            font-family: var(--font-body);
+            font-size: var(--small-size);
+            font-weight: 600;
+            color: var(--accent-navy);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        /* ===========================================
+           SECTION DIVIDER SLIDES
+           =========================================== */
+        .section-slide {
+            background: var(--accent-navy);
+        }
+
+        .section-slide h2 {
+            color: var(--bg-cream);
+            font-size: clamp(1.8rem, 5vw, 3.5rem);
+        }
+
+        .section-slide p {
+            color: var(--accent-warm);
+            font-size: clamp(0.85rem, 1.8vw, 1.15rem);
+        }
+
+        .section-slide .geo-circle {
+            border-color: rgba(232, 212, 192, 0.3);
+        }
+
+        .section-slide .geo-dot {
+            background: var(--accent-warm);
+        }
+
+        /* ===========================================
+           CONTENT CARDS
+           =========================================== */
+        .feature-card {
+            background: white;
+            border: 1px solid var(--border-color);
+            padding: clamp(0.6rem, 1.5vw, 1.2rem);
+            transition: transform 0.3s var(--ease-out-expo);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .feature-card .card-icon {
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            margin-bottom: 0.3em;
+        }
+
+        .feature-card h3 {
+            font-size: clamp(0.8rem, 1.5vw, 1.1rem);
+            font-weight: 700;
+            margin-bottom: 0.3em;
+            color: var(--text-primary);
+        }
+
+        .feature-card p {
+            font-size: var(--small-size);
+            line-height: 1.4;
+        }
+
+        /* ===========================================
+           BORDERED BOX (Editorial Signature)
+           =========================================== */
+        .bordered-box {
+            border: 2px solid var(--text-primary);
+            padding: clamp(0.8rem, 2vw, 1.5rem);
+            position: relative;
+        }
+
+        .bordered-box::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
+            border: 1px solid var(--accent-warm);
+            pointer-events: none;
+        }
+
+        /* ===========================================
+           CODE BLOCKS
+           =========================================== */
+        .code-block {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            padding: clamp(0.5rem, 1.5vw, 1rem);
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            font-size: clamp(0.6rem, 1vw, 0.85rem);
+            line-height: 1.5;
+            overflow: hidden;
+            white-space: pre;
+            color: var(--text-primary);
+        }
+
+        .code-block .comment { color: #888; }
+        .code-block .keyword { color: var(--accent-navy); font-weight: 600; }
+        .code-block .string { color: #8b6914; }
+
+        /* ===========================================
+           ARCHITECTURE DIAGRAM (CSS)
+           =========================================== */
+        .arch-box {
+            border: 2px solid var(--accent-navy);
+            padding: clamp(0.3rem, 1vw, 0.6rem) clamp(0.5rem, 1.5vw, 1rem);
+            font-family: var(--font-body);
+            font-size: var(--small-size);
+            font-weight: 600;
+            color: var(--accent-navy);
+            text-align: center;
+            background: white;
+            position: relative;
+        }
+
+        .arch-box.primary {
+            background: var(--accent-navy);
+            color: var(--bg-cream);
+        }
+
+        .arch-box.secondary {
+            background: var(--accent-warm-light);
+            border-color: var(--accent-warm);
+        }
+
+        .arch-connector {
+            width: 2px;
+            background: var(--accent-navy);
+            margin: 0 auto;
+            height: clamp(8px, 1.5vh, 16px);
+        }
+
+        .arch-row {
+            display: flex;
+            gap: clamp(0.3rem, 1vw, 0.8rem);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* ===========================================
+           FLOW STEPS
+           =========================================== */
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+        }
+
+        .flow-number {
+            font-family: var(--font-display);
+            font-weight: 900;
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            color: var(--accent-navy);
+            line-height: 1;
+            min-width: 1.5em;
+        }
+
+        .flow-step p {
+            font-size: var(--body-size);
+        }
+
+        .flow-step strong {
+            color: var(--text-primary);
+        }
+
+        /* ===========================================
+           TABLE STYLES
+           =========================================== */
+        .editorial-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--small-size);
+        }
+
+        .editorial-table th {
+            font-family: var(--font-body);
+            font-weight: 600;
+            text-align: left;
+            padding: clamp(0.3rem, 0.8vw, 0.5rem) clamp(0.5rem, 1vw, 0.8rem);
+            border-bottom: 2px solid var(--text-primary);
+            color: var(--text-primary);
+            font-size: var(--small-size);
+        }
+
+        .editorial-table td {
+            padding: clamp(0.25rem, 0.6vw, 0.4rem) clamp(0.5rem, 1vw, 0.8rem);
+            border-bottom: 1px solid var(--border-color);
+            font-size: var(--small-size);
+            color: var(--text-secondary);
+        }
+
+        .editorial-table td:first-child {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* ===========================================
+           LISTS
+           =========================================== */
+        .editorial-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(0.3rem, 0.8vh, 0.6rem);
+        }
+
+        .editorial-list li {
+            padding-left: 1.2em;
+            position: relative;
+            font-size: var(--body-size);
+        }
+
+        .editorial-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.55em;
+            width: 6px;
+            height: 6px;
+            background: var(--accent-navy);
+            border-radius: 50%;
+        }
+
+        /* ===========================================
+           TWO-COLUMN LAYOUT
+           =========================================== */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--content-gap);
+            align-items: start;
+        }
+
+        @media (max-width: 600px) {
+            .two-col {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===========================================
+           LABEL / TAG
+           =========================================== */
+        .label {
+            display: inline-block;
+            font-family: var(--font-body);
+            font-size: clamp(0.55rem, 0.8vw, 0.7rem);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--accent-navy);
+            border: 1px solid var(--accent-navy);
+            padding: 0.15em 0.6em;
+            margin-bottom: 0.5em;
+        }
+
+        .label.warm {
+            color: #8b6914;
+            border-color: var(--accent-warm);
+            background: var(--accent-warm-light);
+        }
+
+        /* ===========================================
+           QUOTE BLOCK
+           =========================================== */
+        .editorial-quote {
+            border-left: 3px solid var(--accent-navy);
+            padding-left: clamp(0.8rem, 2vw, 1.5rem);
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: clamp(1rem, 2.5vw, 1.6rem);
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+
+        /* ===========================================
+           UTILITY
+           =========================================== */
+        .text-center { text-align: center; }
+        .mb-sm { margin-bottom: var(--element-gap); }
+        .mb-md { margin-bottom: var(--content-gap); }
+        .text-muted { color: var(--text-secondary); }
+        .text-navy { color: var(--accent-navy); }
+        .fw-bold { font-weight: 700; }
+    </style>
+</head>
+<body>
+
+    <!-- Progress bar -->
+    <div class="progress-bar" id="progressBar"></div>
+
+    <!-- Slide counter -->
+    <div class="slide-counter" id="slideCounter">1 / 22</div>
+
+    <!-- Navigation dots -->
+    <nav class="nav-dots" id="navDots"></nav>
+
+    <!-- ===========================================
+         SLIDE 1: TITLE
+         =========================================== -->
+    <section class="slide title-slide" data-slide="1">
+        <div class="geo-circle" style="width: 200px; height: 200px; top: 10%; right: 8%;"></div>
+        <div class="geo-line" style="width: 80px; height: 2px; bottom: 25%; left: 10%;"></div>
+        <div class="geo-dot" style="bottom: 24%; left: calc(10% + 90px);"></div>
+        <div class="geo-circle" style="width: 60px; height: 60px; bottom: 15%; right: 15%;"></div>
+
+        <div class="slide-content">
+            <h1 class="reveal">AI Congress</h1>
+            <p class="subtitle reveal">Autonomous LLM multi-agent deliberation with weighted ensemble voting, structured debate, and 35 intelligence improvements.</p>
+            <span class="tagline reveal">Where models argue so you don't have to</span>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 2: THE PROBLEM
+         =========================================== -->
+    <section class="slide" data-slide="2">
+        <div class="geo-dot" style="top: 12%; right: 20%;"></div>
+        <div class="geo-line" style="width: 2px; height: 40px; top: 12%; right: calc(20% - 15px);"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">The Problem</span>
+            <h2 class="reveal mb-md">One Model, One Opinion</h2>
+
+            <div class="two-col">
+                <div class="reveal-left" style="transition-delay: 0.2s;">
+                    <div class="bordered-box">
+                        <h3 style="font-size: var(--body-size); margin-bottom: 0.5em;">Single-LLM Limitations</h3>
+                        <ul class="editorial-list">
+                            <li>Hallucinations go unchallenged</li>
+                            <li>No way to gauge confidence</li>
+                            <li>Blind spots baked into training data</li>
+                            <li>Zero accountability for wrong answers</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="reveal-left" style="transition-delay: 0.4s;">
+                    <div class="bordered-box" style="border-color: var(--accent-navy);">
+                        <h3 style="font-size: var(--body-size); margin-bottom: 0.5em;">The Congressional Fix</h3>
+                        <ul class="editorial-list">
+                            <li>Multiple models cross-check each other</li>
+                            <li>Weighted voting quantifies agreement</li>
+                            <li>Structured debate surfaces dissent</li>
+                            <li>Minority reports preserve edge cases</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 3: KEY CAPABILITIES
+         =========================================== -->
+    <section class="slide" data-slide="3">
+        <div class="geo-circle" style="width: 120px; height: 120px; bottom: 8%; left: 5%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Overview</span>
+            <h2 class="reveal mb-md">8 Core Capabilities</h2>
+
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <div class="card-icon">5</div>
+                    <h3>Swarm Modes</h3>
+                    <p>Multi-model, multi-request, hybrid, personality, enhanced</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <div class="card-icon">&oplus;</div>
+                    <h3>Semantic Voting</h3>
+                    <p>Clusters responses by meaning, not string matching</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <div class="card-icon">&harr;</div>
+                    <h3>Multi-Round Debate</h3>
+                    <p>Pressure prompts, conviction tracking, devil's advocate</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <div class="card-icon">&loz;</div>
+                    <h3>Role-Based Agents</h3>
+                    <p>Planner, Worker, Critic, Judge, Synthesizer</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.5s;">
+                    <div class="card-icon">&radic;</div>
+                    <h3>Advanced Reasoning</h3>
+                    <p>Chain-of-Thought, ReAct with real tools</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.6s;">
+                    <div class="card-icon">&para;</div>
+                    <h3>RAG Integration</h3>
+                    <p>Upload docs, chunk, vector search into swarm queries</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 4: MORE CAPABILITIES
+         =========================================== -->
+    <section class="slide" data-slide="4">
+        <div class="geo-dot" style="top: 15%; left: 12%;"></div>
+        <div class="geo-line" style="width: 50px; height: 2px; top: calc(15% + 3px); left: calc(12% + 14px);"></div>
+
+        <div class="slide-content">
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--content-gap);">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <div class="card-icon">&Delta;</div>
+                    <h3>Learning &amp; Adaptation</h3>
+                    <p>Dynamic weight adjustment via EMA win rates. User feedback (thumbs up/down) shifts model weights in real time.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <div class="card-icon">&equiv;</div>
+                    <h3>Full Observability</h3>
+                    <p>Oracle 26ai data lake. Debate replay, decision explanations, performance profiling, minority reports.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <div class="card-icon">&sect;</div>
+                    <h3>Agent Communication Protocol</h3>
+                    <p>Message bus with direct/broadcast/room channels. OTP-style supervision with retry and backoff.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <div class="card-icon">&otimes;</div>
+                    <h3>Integrations</h3>
+                    <p>Web search (DuckDuckGo, SearXNG), voice (Whisper), image gen (Stable Diffusion), documents (PDF/DOCX/XLSX).</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 5: SECTION DIVIDER -- ARCHITECTURE
+         =========================================== -->
+    <section class="slide section-slide" data-slide="5">
+        <div class="geo-circle" style="width: 300px; height: 300px; top: -80px; right: -80px;"></div>
+        <div class="geo-dot" style="bottom: 20%; left: 15%;"></div>
+        <div class="geo-line" style="width: 100px; height: 2px; bottom: calc(20% + 3px); left: calc(15% + 14px);"></div>
+
+        <div class="slide-content text-center" style="align-items: center;">
+            <h2 class="reveal">Architecture</h2>
+            <p class="reveal">How models deliberate, vote, and reach consensus</p>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 6: HIGH-LEVEL ARCHITECTURE
+         =========================================== -->
+    <section class="slide" data-slide="6">
+        <div class="slide-content">
+            <span class="label reveal">System Design</span>
+            <h2 class="reveal mb-md">Three-Tier Deliberation</h2>
+
+            <div class="reveal-scale" style="transition-delay: 0.3s;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 0;">
+                    <div class="arch-row" style="margin-bottom: 0;">
+                        <div class="arch-box primary" style="min-width: 140px;">Web UI / CLI / API</div>
+                    </div>
+                    <div class="arch-connector"></div>
+                    <div class="arch-row" style="margin-bottom: 0;">
+                        <div class="arch-box" style="min-width: 140px;">FastAPI (:8000)</div>
+                    </div>
+                    <div class="arch-connector"></div>
+                    <div class="arch-row" style="gap: clamp(0.2rem, 0.8vw, 0.5rem);">
+                        <div class="arch-box secondary">Swarm Orchestrator</div>
+                        <div class="arch-box secondary">Enhanced Orchestrator</div>
+                        <div class="arch-box secondary">ACP</div>
+                    </div>
+                    <div class="arch-connector"></div>
+                    <div class="arch-row" style="gap: clamp(0.2rem, 0.8vw, 0.5rem);">
+                        <div class="arch-box">Intelligence</div>
+                        <div class="arch-box">Voting</div>
+                        <div class="arch-box">Debate</div>
+                        <div class="arch-box">Coordination</div>
+                        <div class="arch-box">Learning</div>
+                    </div>
+                    <div class="arch-connector"></div>
+                    <div class="arch-row">
+                        <div class="arch-box primary" style="min-width: 200px;">Oracle 26ai Data Lake</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 7: HOW A QUERY FLOWS
+         =========================================== -->
+    <section class="slide" data-slide="7">
+        <div class="geo-circle" style="width: 80px; height: 80px; top: 10%; right: 10%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Flow</span>
+            <h2 class="reveal mb-md">Life of a Query</h2>
+
+            <div style="display: flex; flex-direction: column; gap: clamp(0.4rem, 1.2vh, 0.9rem);">
+                <div class="flow-step reveal" style="transition-delay: 0.15s;">
+                    <span class="flow-number">1</span>
+                    <p><strong>Complexity estimation.</strong> NLP heuristics score the query 0.0 to 1.0. Simple questions skip debate entirely.</p>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.25s;">
+                    <span class="flow-number">2</span>
+                    <p><strong>Parallel model dispatch.</strong> Selected Ollama models receive the prompt concurrently via asyncio.</p>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.35s;">
+                    <span class="flow-number">3</span>
+                    <p><strong>Semantic clustering.</strong> Responses grouped by meaning (not string match). Coalitions form before voting.</p>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.45s;">
+                    <span class="flow-number">4</span>
+                    <p><strong>Ensemble voting.</strong> Weighted majority + temperature ensemble + confidence-based, then meta-vote.</p>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.55s;">
+                    <span class="flow-number">5</span>
+                    <p><strong>Debate rounds (if needed).</strong> Low-confidence results trigger multi-round structured argumentation.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 8: THE 5 SWARM MODES
+         =========================================== -->
+    <section class="slide" data-slide="8">
+        <div class="geo-dot" style="bottom: 10%; right: 8%;"></div>
+        <div class="geo-line" style="width: 2px; height: 30px; bottom: calc(10% + 12px); right: calc(8% + 3px);"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Modes</span>
+            <h2 class="reveal mb-md">5 Ways to Run the Swarm</h2>
+
+            <table class="editorial-table reveal-scale" style="transition-delay: 0.3s;">
+                <thead>
+                    <tr>
+                        <th>Mode</th>
+                        <th>Strategy</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Multi-Model</td>
+                        <td>Different LLMs, same prompt</td>
+                        <td>Diverse perspectives</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-Request</td>
+                        <td>Same LLM, varied temperature</td>
+                        <td>Consistency vs. creativity</td>
+                    </tr>
+                    <tr>
+                        <td>Hybrid</td>
+                        <td>Both strategies combined</td>
+                        <td>Maximum diversity</td>
+                    </tr>
+                    <tr>
+                        <td>Personality</td>
+                        <td>Role-assigned agents debate</td>
+                        <td>Structured argumentation</td>
+                    </tr>
+                    <tr>
+                        <td>Enhanced</td>
+                        <td>All 35 improvements active</td>
+                        <td>Full congressional protocol</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 9: SECTION DIVIDER -- INTELLIGENCE
+         =========================================== -->
+    <section class="slide section-slide" data-slide="9">
+        <div class="geo-circle" style="width: 150px; height: 150px; bottom: 10%; left: -40px;"></div>
+        <div class="geo-dot" style="top: 30%; right: 20%;"></div>
+
+        <div class="slide-content text-center" style="align-items: center;">
+            <h2 class="reveal">35 Intelligence Improvements</h2>
+            <p class="reveal">Six categories that make the swarm smarter than any single model</p>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 10: AGENT INTELLIGENCE PATTERNS
+         =========================================== -->
+    <section class="slide" data-slide="10">
+        <div class="slide-content">
+            <span class="label warm reveal">Category 1</span>
+            <h2 class="reveal mb-md">Agent Intelligence Patterns</h2>
+
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <h3>Role Specialization</h3>
+                    <p>Planner, Worker, Critic, Judge, Synthesizer. Each gets a tuned system prompt.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <h3>ReAct Reasoning</h3>
+                    <p>Thought-Action-Observation loops with real tools: web search, calculate, document lookup.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <h3>Chain-of-Thought</h3>
+                    <p>Force step-by-step reasoning before final answers. Separates thinking from output.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <h3>Adaptive Routing</h3>
+                    <p>Complexity estimator picks the right pipeline: simple queries skip the heavy machinery.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.5s;">
+                    <h3>MoE-Style Routing</h3>
+                    <p>Models matched to query type (code, math, creative) based on benchmark strengths.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.6s;">
+                    <h3>Goal Alignment</h3>
+                    <p>Personality traits map to AgentRoles. Each agent's goals stay consistent across sessions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 11: VOTING & CONSENSUS
+         =========================================== -->
+    <section class="slide" data-slide="11">
+        <div class="geo-line" style="width: 60px; height: 2px; top: 15%; left: 8%;"></div>
+        <div class="geo-dot" style="top: calc(15% + -3px); left: calc(8% + 65px);"></div>
+
+        <div class="slide-content">
+            <span class="label warm reveal">Category 2</span>
+            <h2 class="reveal mb-md">Voting &amp; Consensus</h2>
+
+            <div class="two-col">
+                <div>
+                    <div class="flow-step reveal" style="transition-delay: 0.15s;">
+                        <span class="flow-number">&bull;</span>
+                        <p><strong>Multi-Algorithm Ensemble.</strong> Weighted majority + temperature ensemble + confidence-based, then meta-votes across all three.</p>
+                    </div>
+                    <div class="flow-step reveal" style="transition-delay: 0.25s; margin-top: clamp(0.3rem, 1vh, 0.6rem);">
+                        <span class="flow-number">&bull;</span>
+                        <p><strong>Confidence Calibration.</strong> Tracks predicted vs. actual accuracy. Applies calibration curves so "80% confident" really means 80%.</p>
+                    </div>
+                    <div class="flow-step reveal" style="transition-delay: 0.35s; margin-top: clamp(0.3rem, 1vh, 0.6rem);">
+                        <span class="flow-number">&bull;</span>
+                        <p><strong>Minority Report.</strong> The strongest dissenting view ships alongside consensus. Edge cases don't vanish.</p>
+                    </div>
+                </div>
+                <div>
+                    <div class="flow-step reveal" style="transition-delay: 0.45s;">
+                        <span class="flow-number">&bull;</span>
+                        <p><strong>Conviction-Weighted Voting.</strong> Models holding consistent positions across debate rounds earn higher voting weight.</p>
+                    </div>
+                    <div class="flow-step reveal" style="transition-delay: 0.55s; margin-top: clamp(0.3rem, 1vh, 0.6rem);">
+                        <span class="flow-number">&bull;</span>
+                        <p><strong>Contextual Algorithm Selection.</strong> Query type determines which voting algorithm runs. Factual questions use majority; creative ones use temperature ensemble.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 12: DEBATE & DELIBERATION
+         =========================================== -->
+    <section class="slide" data-slide="12">
+        <div class="geo-circle" style="width: 100px; height: 100px; bottom: 10%; right: 5%;"></div>
+
+        <div class="slide-content">
+            <span class="label warm reveal">Category 3</span>
+            <h2 class="reveal mb-md">Debate &amp; Deliberation</h2>
+
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <h3>Structured Argumentation</h3>
+                    <p>Multi-round debate with pressure prompts. Each round narrows disagreement.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <h3>Devil's Advocate</h3>
+                    <p>One agent assigned to challenge the emerging consensus. Prevents groupthink.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <h3>Evidence-Grounded</h3>
+                    <p>Agents must cite sources or reasoning chains. Unsupported claims get flagged.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <h3>Stare Decisis</h3>
+                    <p>Precedent-based reasoning. Past successful debates inform current deliberation.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.5s;">
+                    <h3>Debate Replay</h3>
+                    <p>Full transcripts saved to Oracle. Replay any deliberation to audit the reasoning path.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 13: AGENT COORDINATION
+         =========================================== -->
+    <section class="slide" data-slide="13">
+        <div class="geo-dot" style="top: 12%; left: 10%;"></div>
+        <div class="geo-line" style="width: 40px; height: 2px; top: calc(12% + 3px); left: calc(10% + 14px);"></div>
+
+        <div class="slide-content">
+            <span class="label warm reveal">Category 4</span>
+            <h2 class="reveal mb-md">Agent Coordination</h2>
+
+            <div class="two-col">
+                <div>
+                    <ul class="editorial-list">
+                        <li class="reveal" style="transition-delay: 0.15s;"><strong>Circuit Breaker:</strong> Failing models auto-skipped (CLOSED / OPEN / HALF_OPEN states)</li>
+                        <li class="reveal" style="transition-delay: 0.25s;"><strong>Coalition Formation:</strong> Similar responses grouped before voting to prevent vote splitting</li>
+                        <li class="reveal" style="transition-delay: 0.35s;"><strong>Graceful Degradation:</strong> Adapts mode based on available models (full, simplified, single)</li>
+                    </ul>
+                </div>
+                <div>
+                    <ul class="editorial-list">
+                        <li class="reveal" style="transition-delay: 0.45s;"><strong>Adaptive Timeouts:</strong> Per-model timeouts based on 3x EMA of historical latency</li>
+                        <li class="reveal" style="transition-delay: 0.55s;"><strong>Personality-Driven Comms:</strong> Communication style (formal/casual) shapes system prompts</li>
+                        <li class="reveal" style="transition-delay: 0.65s;"><strong>Agent Handoff:</strong> Capability-based task delegation between agents</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 14: LEARNING & OBSERVABILITY
+         =========================================== -->
+    <section class="slide" data-slide="14">
+        <div class="geo-circle" style="width: 70px; height: 70px; top: 8%; right: 12%;"></div>
+
+        <div class="slide-content">
+            <span class="label warm reveal">Categories 5 &amp; 6</span>
+            <h2 class="reveal mb-md">Learning &amp; Observability</h2>
+
+            <div class="two-col">
+                <div class="bordered-box reveal-left" style="transition-delay: 0.2s;">
+                    <h3 style="font-size: var(--body-size); margin-bottom: 0.5em; color: var(--accent-navy);">Learning &amp; Adaptation</h3>
+                    <ul class="editorial-list">
+                        <li>Dynamic weight adjustment via EMA win rates</li>
+                        <li>User feedback loop (thumbs up/down)</li>
+                        <li>A/B testing debate prompts; promotes winners</li>
+                        <li>Personality state persists across sessions</li>
+                    </ul>
+                </div>
+                <div class="bordered-box reveal-left" style="transition-delay: 0.4s;">
+                    <h3 style="font-size: var(--body-size); margin-bottom: 0.5em; color: var(--accent-navy);">Observability</h3>
+                    <ul class="editorial-list">
+                        <li>Decision explanations auto-generated</li>
+                        <li>Performance profiling per model</li>
+                        <li>Debate replay with full transcripts</li>
+                        <li>Chunk-level RAG attribution</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 15: SECTION DIVIDER -- TECH STACK
+         =========================================== -->
+    <section class="slide section-slide" data-slide="15">
+        <div class="geo-circle" style="width: 180px; height: 180px; top: -50px; left: -50px;"></div>
+        <div class="geo-dot" style="bottom: 25%; right: 18%;"></div>
+        <div class="geo-line" style="width: 70px; height: 2px; bottom: calc(25% + 3px); right: calc(18% - 75px);"></div>
+
+        <div class="slide-content text-center" style="align-items: center;">
+            <h2 class="reveal">Tech Stack</h2>
+            <p class="reveal">Python, Svelte, Ollama, Oracle, and friends</p>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 16: TECH STACK DETAILS
+         =========================================== -->
+    <section class="slide" data-slide="16">
+        <div class="slide-content">
+            <span class="label reveal">Stack</span>
+            <h2 class="reveal mb-md">What Powers the Congress</h2>
+
+            <div class="two-col">
+                <div>
+                    <table class="editorial-table reveal" style="transition-delay: 0.2s;">
+                        <thead><tr><th>Layer</th><th>Tech</th></tr></thead>
+                        <tbody>
+                            <tr><td>Backend</td><td>Python 3.10+, FastAPI, asyncio</td></tr>
+                            <tr><td>LLM Runtime</td><td>Ollama (local inference)</td></tr>
+                            <tr><td>Frontend</td><td>Svelte + Vite + Tailwind CSS</td></tr>
+                            <tr><td>CLI</td><td>Rich + Click/Typer</td></tr>
+                            <tr><td>Database</td><td>Oracle 26ai Free (data lake)</td></tr>
+                            <tr><td>Search</td><td>DuckDuckGo, SearXNG, Yacy</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <table class="editorial-table reveal" style="transition-delay: 0.4s;">
+                        <thead><tr><th>Feature</th><th>Lib</th></tr></thead>
+                        <tbody>
+                            <tr><td>Voice</td><td>Whisper (transcription)</td></tr>
+                            <tr><td>Image Gen</td><td>Stable Diffusion</td></tr>
+                            <tr><td>Documents</td><td>PDF, DOCX, XLSX parsers</td></tr>
+                            <tr><td>Vectors</td><td>Oracle AI Vector Search</td></tr>
+                            <tr><td>WebSockets</td><td>FastAPI native WS</td></tr>
+                            <tr><td>Deployment</td><td>Docker + Docker Compose</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 17: AGENT COMMUNICATION PROTOCOL
+         =========================================== -->
+    <section class="slide" data-slide="17">
+        <div class="geo-dot" style="top: 10%; right: 15%;"></div>
+        <div class="geo-line" style="width: 2px; height: 35px; top: calc(10% + 12px); right: calc(15% + 3px);"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">ACP</span>
+            <h2 class="reveal mb-md">Agent Communication Protocol</h2>
+
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <h3>Message Bus</h3>
+                    <p>Direct, broadcast, and room channels. Agents subscribe to topics they care about.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <h3>Agent Registry</h3>
+                    <p>Query agents by role or capability. Dynamic discovery as models come online.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <h3>OTP-Style Supervision</h3>
+                    <p>Retry with exponential backoff. Crashed agents restart without killing the session.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <h3>Role Dispatcher</h3>
+                    <p>Maps personality traits to agent roles. Consistent behavior across debate rounds.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.5s;">
+                    <h3>Hash Anchoring</h3>
+                    <p>Deterministic response references. Every statement gets a content hash for audit trails.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 18: API ENDPOINTS
+         =========================================== -->
+    <section class="slide" data-slide="18">
+        <div class="geo-circle" style="width: 90px; height: 90px; bottom: 8%; left: 6%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">API</span>
+            <h2 class="reveal mb-md">REST + WebSocket Endpoints</h2>
+
+            <div class="code-block reveal-scale" style="transition-delay: 0.3s;">
+<span class="comment"># Core chat endpoints</span>
+POST /api/chat                  <span class="comment"># Standard swarm query</span>
+POST /api/chat/enhanced         <span class="comment"># Full 35-improvement pipeline</span>
+  WS /api/ws/chat               <span class="comment"># Real-time streaming</span>
+
+<span class="comment"># Model management</span>
+ GET /api/models                <span class="comment"># List available Ollama models</span>
+ GET /api/models/weights        <span class="comment"># Current voting weights</span>
+POST /api/models/benchmark      <span class="comment"># Trigger benchmark update</span>
+
+<span class="comment"># Observability</span>
+ GET /api/debates/{id}/replay   <span class="comment"># Full debate transcript</span>
+ GET /api/health                <span class="comment"># System health check</span>
+POST /api/feedback              <span class="comment"># User thumbs up/down</span></div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 19: CONFIGURATION
+         =========================================== -->
+    <section class="slide" data-slide="19">
+        <div class="geo-dot" style="bottom: 12%; right: 10%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Config</span>
+            <h2 class="reveal mb-md">Everything in config.yaml</h2>
+
+            <div class="two-col">
+                <div class="code-block reveal-left" style="transition-delay: 0.2s;">
+<span class="comment"># config/config.yaml</span>
+<span class="keyword">ollama</span>:
+  base_url: <span class="string">"http://localhost:11434"</span>
+  preferred_models:
+    - <span class="string">qwen3.5:9b</span>
+    - <span class="string">phi3:3.8b</span>
+    - <span class="string">llama3.2:3b</span>
+
+<span class="keyword">swarm</span>:
+  default_mode: <span class="string">multi_model</span>
+  max_concurrent: <span class="string">5</span>
+  debate_rounds: <span class="string">3</span></div>
+
+                <div class="code-block reveal-left" style="transition-delay: 0.4s;">
+<span class="keyword">voting</span>:
+  default_algorithm: <span class="string">weighted_majority</span>
+  semantic_threshold: <span class="string">0.7</span>
+  enable_minority_report: <span class="string">true</span>
+
+<span class="keyword">oracle</span>:
+  dsn: <span class="string">"localhost:1521/FREEPDB1"</span>
+  enable_datalake: <span class="string">true</span>
+
+<span class="keyword">integrations</span>:
+  web_search: <span class="string">duckduckgo</span>
+  voice: <span class="string">whisper</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 20: GETTING STARTED
+         =========================================== -->
+    <section class="slide" data-slide="20">
+        <div class="geo-line" style="width: 50px; height: 2px; top: 12%; right: 10%;"></div>
+        <div class="geo-dot" style="top: calc(12% - 3px); right: calc(10% + 55px);"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Quick Start</span>
+            <h2 class="reveal mb-md">Up and Running in 3 Minutes</h2>
+
+            <div style="display: flex; flex-direction: column; gap: clamp(0.4rem, 1.2vh, 0.9rem);">
+                <div class="flow-step reveal" style="transition-delay: 0.15s;">
+                    <span class="flow-number">1</span>
+                    <div>
+                        <p><strong>One-command install</strong></p>
+                        <div class="code-block" style="margin-top: 0.3em;">curl -fsSL https://raw.githubusercontent.com/jasperan/ai-congress/main/install.sh | bash</div>
+                    </div>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.3s;">
+                    <span class="flow-number">2</span>
+                    <div>
+                        <p><strong>CLI mode</strong></p>
+                        <div class="code-block" style="margin-top: 0.3em;">python -m ai_congress chat <span class="string">"Compare Python vs Rust for CLI tools"</span></div>
+                    </div>
+                </div>
+                <div class="flow-step reveal" style="transition-delay: 0.45s;">
+                    <span class="flow-number">3</span>
+                    <div>
+                        <p><strong>Web interface</strong></p>
+                        <div class="code-block" style="margin-top: 0.3em;">cd frontend && npm install && npm run dev  <span class="comment"># Opens at localhost:5173</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 21: ENHANCED MODE CODE
+         =========================================== -->
+    <section class="slide" data-slide="21">
+        <div class="geo-circle" style="width: 60px; height: 60px; top: 10%; left: 8%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Usage</span>
+            <h2 class="reveal mb-md">Enhanced Mode (API)</h2>
+
+            <div class="code-block reveal-scale" style="transition-delay: 0.3s;">
+<span class="keyword">import</span> requests
+
+response = requests.post(<span class="string">"http://localhost:8000/api/chat/enhanced"</span>, json={
+    <span class="string">"prompt"</span>: <span class="string">"Should we use microservices or a monolith?"</span>,
+    <span class="string">"mode"</span>: <span class="string">"personality"</span>,
+    <span class="string">"enable_debate"</span>: True,
+    <span class="string">"debate_rounds"</span>: 3,
+    <span class="string">"enable_minority_report"</span>: True
+})
+
+result = response.json()
+<span class="keyword">print</span>(result[<span class="string">"consensus"</span>])        <span class="comment"># The winning answer</span>
+<span class="keyword">print</span>(result[<span class="string">"minority_report"</span>])   <span class="comment"># Strongest dissent</span>
+<span class="keyword">print</span>(result[<span class="string">"confidence"</span>])        <span class="comment"># 0.0 - 1.0</span></div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 22: PROJECT STRUCTURE
+         =========================================== -->
+    <section class="slide" data-slide="22">
+        <div class="geo-dot" style="top: 15%; right: 12%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Structure</span>
+            <h2 class="reveal mb-md">Project Layout</h2>
+
+            <div class="two-col">
+                <div class="code-block reveal-left" style="transition-delay: 0.2s;">
+<span class="keyword">src/ai_congress/</span>
+  core/
+    swarm_orchestrator.py
+    enhanced_orchestrator.py
+    voting_engine.py
+    model_registry.py
+    debate_manager.py
+    rag_engine.py
+    acp.py
+  api/
+    routes/
+    websockets/</div>
+
+                <div class="code-block reveal-left" style="transition-delay: 0.4s;">
+  cli/
+    commands/
+    formatters/
+  db/
+  utils/
+<span class="keyword">frontend/</span>
+  src/          <span class="comment"># Svelte + Vite</span>
+<span class="keyword">config/</span>
+  config.yaml
+  models_benchmark.json
+<span class="keyword">tests/</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 23: DOCKER & DEPLOYMENT
+         =========================================== -->
+    <section class="slide" data-slide="23">
+        <div class="geo-line" style="width: 80px; height: 2px; bottom: 20%; left: 8%;"></div>
+        <div class="geo-circle" style="width: 50px; height: 50px; bottom: calc(20% - 28px); left: calc(8% + 85px);"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Deploy</span>
+            <h2 class="reveal mb-md">Docker Compose, Two Commands</h2>
+
+            <div style="display: flex; flex-direction: column; gap: clamp(0.5rem, 1.5vh, 1rem);">
+                <div class="bordered-box reveal" style="transition-delay: 0.2s;">
+                    <h3 style="font-size: var(--body-size); margin-bottom: 0.4em;">Standard (API + Frontend)</h3>
+                    <div class="code-block">docker-compose up -d</div>
+                </div>
+                <div class="bordered-box reveal" style="transition-delay: 0.35s;">
+                    <h3 style="font-size: var(--body-size); margin-bottom: 0.4em;">With SearXNG Web Search</h3>
+                    <div class="code-block">docker-compose -f docker-compose.searxng.yml up</div>
+                </div>
+                <div class="bordered-box reveal" style="transition-delay: 0.5s;">
+                    <h3 style="font-size: var(--body-size); margin-bottom: 0.4em;">Prerequisites</h3>
+                    <p>Python 3.10+, Ollama running locally, at least one pulled model. Oracle 26ai Free for the data lake (optional but recommended).</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 24: ROADMAP
+         =========================================== -->
+    <section class="slide" data-slide="24">
+        <div class="geo-circle" style="width: 140px; height: 140px; top: -40px; right: -40px;"></div>
+        <div class="geo-dot" style="bottom: 15%; left: 10%;"></div>
+
+        <div class="slide-content">
+            <span class="label reveal">Roadmap</span>
+            <h2 class="reveal mb-md">What's Next</h2>
+
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));">
+                <div class="feature-card reveal" style="transition-delay: 0.1s;">
+                    <h3>Benchmark Auto-Update</h3>
+                    <p>Periodic self-evaluation against standardized tests. Weights adjust automatically.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.2s;">
+                    <h3>Remote Model Support</h3>
+                    <p>Plug in OpenAI, Anthropic, or any OpenAI-compatible endpoint alongside local Ollama.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.3s;">
+                    <h3>Multi-Tenant Sessions</h3>
+                    <p>Isolated congressional sessions per user with separate weight histories.</p>
+                </div>
+                <div class="feature-card reveal" style="transition-delay: 0.4s;">
+                    <h3>Visual Debate Graph</h3>
+                    <p>Interactive D3.js visualization of debate rounds, coalitions, and vote flows.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+         SLIDE 25: CLOSING
+         =========================================== -->
+    <section class="slide title-slide" data-slide="25">
+        <div class="geo-circle" style="width: 250px; height: 250px; bottom: -80px; left: -80px;"></div>
+        <div class="geo-line" style="width: 100px; height: 2px; top: 20%; right: 10%;"></div>
+        <div class="geo-dot" style="top: calc(20% - 3px); right: calc(10% + 105px);"></div>
+        <div class="geo-circle" style="width: 40px; height: 40px; top: 15%; right: 25%;"></div>
+
+        <div class="slide-content">
+            <h1 class="reveal" style="font-size: clamp(1.5rem, 5vw, 3.5rem);">AI Congress</h1>
+            <p class="subtitle reveal">Models that deliberate, debate, and vote so you get better answers.</p>
+            <div class="reveal" style="transition-delay: 0.3s; margin-top: var(--content-gap);">
+                <div class="bordered-box" style="display: inline-block; text-align: center;">
+                    <p style="font-size: var(--body-size); color: var(--accent-navy); font-weight: 600;">github.com/jasperan/ai-congress</p>
+                    <p style="font-size: var(--small-size); color: var(--text-secondary); margin-top: 0.3em;">MIT License</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===========================================
+       SLIDE PRESENTATION CONTROLLER
+       =========================================== -->
+    <script>
+        class SlidePresentation {
+            constructor() {
+                this.slides = document.querySelectorAll('.slide');
+                this.currentSlide = 0;
+                this.totalSlides = this.slides.length;
+                this.isScrolling = false;
+
+                this.setupIntersectionObserver();
+                this.setupKeyboardNav();
+                this.setupTouchNav();
+                this.setupProgressBar();
+                this.setupNavDots();
+                this.updateCounter();
+            }
+
+            /* --- Intersection Observer --- */
+            setupIntersectionObserver() {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('visible');
+                            const idx = Array.from(this.slides).indexOf(entry.target);
+                            if (idx !== -1) {
+                                this.currentSlide = idx;
+                                this.updateProgressBar();
+                                this.updateNavDots();
+                                this.updateCounter();
+                            }
+                        }
+                    });
+                }, { threshold: 0.5 });
+
+                this.slides.forEach(slide => observer.observe(slide));
+            }
+
+            /* --- Keyboard Navigation --- */
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (e) => {
+                    switch(e.key) {
+                        case 'ArrowDown':
+                        case 'ArrowRight':
+                        case ' ':
+                        case 'PageDown':
+                            e.preventDefault();
+                            this.goToSlide(this.currentSlide + 1);
+                            break;
+                        case 'ArrowUp':
+                        case 'ArrowLeft':
+                        case 'PageUp':
+                            e.preventDefault();
+                            this.goToSlide(this.currentSlide - 1);
+                            break;
+                        case 'Home':
+                            e.preventDefault();
+                            this.goToSlide(0);
+                            break;
+                        case 'End':
+                            e.preventDefault();
+                            this.goToSlide(this.totalSlides - 1);
+                            break;
+                    }
+                });
+            }
+
+            /* --- Touch / Swipe Navigation --- */
+            setupTouchNav() {
+                let touchStartY = 0;
+                let touchEndY = 0;
+
+                document.addEventListener('touchstart', (e) => {
+                    touchStartY = e.changedTouches[0].screenY;
+                }, { passive: true });
+
+                document.addEventListener('touchend', (e) => {
+                    touchEndY = e.changedTouches[0].screenY;
+                    const diff = touchStartY - touchEndY;
+                    if (Math.abs(diff) > 50) {
+                        if (diff > 0) {
+                            this.goToSlide(this.currentSlide + 1);
+                        } else {
+                            this.goToSlide(this.currentSlide - 1);
+                        }
+                    }
+                }, { passive: true });
+            }
+
+            /* --- Progress Bar --- */
+            setupProgressBar() {
+                this.progressBar = document.getElementById('progressBar');
+                this.updateProgressBar();
+            }
+
+            updateProgressBar() {
+                if (this.progressBar) {
+                    const pct = ((this.currentSlide + 1) / this.totalSlides) * 100;
+                    this.progressBar.style.width = pct + '%';
+                }
+            }
+
+            /* --- Nav Dots --- */
+            setupNavDots() {
+                const container = document.getElementById('navDots');
+                if (!container) return;
+                container.innerHTML = '';
+                this.slides.forEach((_, i) => {
+                    const dot = document.createElement('button');
+                    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+                    dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+                    dot.addEventListener('click', () => this.goToSlide(i));
+                    container.appendChild(dot);
+                });
+            }
+
+            updateNavDots() {
+                const dots = document.querySelectorAll('.nav-dot');
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === this.currentSlide);
+                });
+            }
+
+            /* --- Slide Counter --- */
+            updateCounter() {
+                const counter = document.getElementById('slideCounter');
+                if (counter) {
+                    counter.textContent = (this.currentSlide + 1) + ' / ' + this.totalSlides;
+                }
+            }
+
+            /* --- Go To Slide --- */
+            goToSlide(index) {
+                if (index < 0 || index >= this.totalSlides) return;
+                this.slides[index].scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        /* Initialize on DOM ready */
+        document.addEventListener('DOMContentLoaded', () => {
+            new SlidePresentation();
+        });
+    </script>
+
+</body>
+</html>

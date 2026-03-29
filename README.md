@@ -8,6 +8,27 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Ollama](https://img.shields.io/badge/backend-Ollama-black?style=for-the-badge)
 
+<div align="center">
+
+**[View Interactive Presentation](docs/slides/presentation.html)** | Animated overview of the project
+
+</div>
+
+<table>
+<tr>
+<td><img src="docs/slides/slide-01.png" alt="Title" width="400"/></td>
+<td><img src="docs/slides/slide-02.png" alt="Overview" width="400"/></td>
+</tr>
+<tr>
+<td><img src="docs/slides/slide-03.png" alt="Architecture" width="400"/></td>
+<td><img src="docs/slides/slide-04.png" alt="Features" width="400"/></td>
+</tr>
+<tr>
+<td><img src="docs/slides/slide-05.png" alt="Tech Stack" width="400"/></td>
+<td><img src="docs/slides/slide-06.png" alt="Getting Started" width="400"/></td>
+</tr>
+</table>
+
 AI Congress is an autonomous LLM multi-agent system where different LLMs collaboratively vote on responses using weighted ensemble decision-making. Features 35 intelligence improvements including role-based agent specialization, structured debate, evidence-grounded reasoning, adaptive learning, and full observability via Oracle 26ai.
 
 ## Screenshots
