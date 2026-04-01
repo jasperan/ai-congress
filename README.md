@@ -10,7 +10,7 @@
 
 <div align="center">
 
-**[View Interactive Presentation](docs/slides/presentation.html)** | Animated overview of the project
+**[View Interactive Presentation](docs/slides/presentation.html)** | **[Explore the Interactive Article](https://jasperan.github.io/ai-congress/)** | Animated overview of the project
 
 </div>
 
