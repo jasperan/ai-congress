@@ -1,0 +1,4 @@
+{
+  "communication_style": "balanced",
+  "model": "mistral:7b"
+}

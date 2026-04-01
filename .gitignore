@@ -242,3 +242,6 @@ docs/*
 
 # Rust build artifacts (tui-rs)
 tui-rs/target/
+
+# Local agent directories
+.pi/

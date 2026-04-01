@@ -1,0 +1,4 @@
+{
+  "communication_style": "balanced",
+  "model": "smollm2:135m"
+}
