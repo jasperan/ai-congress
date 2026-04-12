@@ -11,6 +11,8 @@ use ratatui::{
     Frame,
 };
 
+use rattles::presets::prelude as spinners;
+
 use crate::theme;
 
 // ── Supporting Types (copied from app.rs) ───────────────────────────────────
@@ -1287,8 +1289,9 @@ impl SimulationScreen {
         let sentiment_display = sentiment_indicator(sentiment);
 
         let status = if is_active {
+            let frame = spinners::dots().current_frame();
             Span::styled(
-                " generating... ",
+                format!(" {} generating... ", frame),
                 Style::default()
                     .fg(theme::GREEN)
                     .add_modifier(Modifier::BOLD),

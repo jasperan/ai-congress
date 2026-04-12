@@ -8,6 +8,8 @@ use ratatui::Frame;
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::Input;
 
+use rattles::presets::prelude as spinners;
+
 use crate::api::rest::ModelInfo;
 use crate::theme;
 
@@ -152,9 +154,12 @@ impl ModelsScreen {
 
     pub fn draw(&mut self, f: &mut Frame, area: Rect) {
         if self.loading {
-            let loading = Paragraph::new("Loading models...")
-                .alignment(ratatui::layout::Alignment::Center)
-                .style(Style::default().fg(theme::YELLOW));
+            let spinner_frame = spinners::dots().current_frame();
+            let loading = Paragraph::new(Line::from(vec![
+                Span::styled(spinner_frame, Style::default().fg(theme::CYAN)),
+                Span::styled(" Loading models...", Style::default().fg(theme::YELLOW)),
+            ]))
+            .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(loading, area);
             return;
         }

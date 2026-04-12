@@ -24,3 +24,4 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 textwrap = "0.16"
 similar = "2"
 tui-input = "0.10"
+rattles = "0.2"
