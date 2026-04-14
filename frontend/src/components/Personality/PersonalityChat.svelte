@@ -434,17 +434,17 @@
   <div class="flex-1 card mb-4 flex flex-col overflow-hidden">
     <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
       {#if messages.length === 0}
-        <div class="flex flex-col items-center justify-center h-full text-center py-12">
-          <div class="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-600
-                      flex items-center justify-center text-white text-2xl shadow-lg">
+        <div class="flex flex-col items-center justify-center h-full text-center py-16">
+          <div class="w-14 h-14 mb-5 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600
+                      flex items-center justify-center text-white text-xl shadow-md">
             🎭
           </div>
-          <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Personality Swarm Chat
+          <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2 text-balance">
+            Personality swarm chat
           </h3>
-          <p class="text-gray-600 dark:text-gray-400 max-w-md">
-            Select personalities above and start chatting. Watch as different AI personalities
-            debate and collaborate using their unique perspectives and characteristics.
+          <p class="text-sm text-gray-600 dark:text-gray-400 max-w-sm leading-relaxed text-pretty">
+            Select personalities above and start chatting. Different AI personalities
+            will debate and collaborate using their unique perspectives.
           </p>
         </div>
       {:else}

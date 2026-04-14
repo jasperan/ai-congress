@@ -395,15 +395,15 @@
   <div class="flex-1 card mb-4 flex flex-col overflow-hidden">
     <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4" role="log" aria-live="polite">
       {#if messages.length === 0}
-        <div class="flex flex-col items-center justify-center h-full text-center py-12">
-          <div class="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 dark:from-primary-400 dark:to-secondary-400 flex items-center justify-center text-white text-2xl shadow-lg no-select" role="img" aria-label="AI Congress logo">
+        <div class="flex flex-col items-center justify-center h-full text-center py-16">
+          <div class="w-14 h-14 mb-5 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 dark:from-primary-400 dark:to-secondary-400 flex items-center justify-center text-white text-xl shadow-md no-select" role="img" aria-label="AI Congress logo">
             🏛️
           </div>
-          <h3 class="text-xl font-bold text-text-primary dark:text-text-primary mb-2">
+          <h3 class="text-lg font-bold text-text-primary dark:text-text-primary mb-2 text-balance">
             Welcome to AI Congress
           </h3>
-          <p class="text-text-secondary dark:text-text-tertiary max-w-md">
-            Select your models above and start chatting. Watch as multiple LLMs collaborate and vote on the best response using ensemble decision-making.
+          <p class="text-sm text-text-secondary dark:text-text-tertiary max-w-sm leading-relaxed text-pretty">
+            Select your models above and start chatting. Multiple LLMs will collaborate and vote on the best response.
           </p>
         </div>
       {:else}

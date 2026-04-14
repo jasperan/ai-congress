@@ -13,7 +13,7 @@
 
   onMount(async () => {
     mounted = true
-    
+
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       darkMode = true
       document.documentElement.classList.add('dark')
@@ -50,7 +50,7 @@
   }
 </script>
 
-<!-- 
+<!--
   DESIGN SYSTEM: Capitol Modern
   Aesthetic: Government architecture meets futuristic civic tech
   Inspiration: US Capitol building geometry + modern democratic transparency
@@ -65,24 +65,25 @@
 </svelte:head>
 
 <div class="min-h-screen bg-capitol-50 dark:bg-capitol-950 transition-colors duration-500 font-sans">
+  <!-- Skip to content -->
+  <a href="#main-content" class="skip-link">Skip to content</a>
+
   <!-- Navigation Bar -->
-  <nav class="sticky top-0 z-50 bg-white/90 dark:bg-capitol-900/90 backdrop-blur-xl border-b border-capitol-200 dark:border-capitol-800 shadow-sm transition-all duration-300">
+  <nav class="sticky top-0 z-50 bg-white/85 dark:bg-capitol-900/85 backdrop-blur-xl border-b border-capitol-200 dark:border-capitol-800 transition-all duration-300">
     <div class="max-w-7xl mx-auto px-6 lg:px-8">
-      <div class="flex items-center justify-between h-20">
+      <div class="flex items-center justify-between h-16">
         <!-- Logo and Title -->
-        <div class="flex items-center gap-4">
-          <div class="relative w-12 h-12 rounded-xl bg-gradient-to-br from-capitol-700 via-capitol-600 to-gold-500 flex items-center justify-center shadow-lg shadow-capitol-500/20 overflow-hidden group">
-            <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.05\' fill-rule=\'evenodd\'%3E%3Ccircle cx=\'3\' cy=\'3\' r=\'3\'/%3E%3Ccircle cx=\'13\' cy=\'13\' r=\'3\'/%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
-            <svg class="w-7 h-7 text-white relative z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <div class="flex items-center gap-3.5">
+          <div class="relative w-10 h-10 rounded-lg bg-gradient-to-br from-capitol-700 via-capitol-600 to-gold-500 flex items-center justify-center shadow-md overflow-hidden">
+            <svg class="w-5.5 h-5.5 text-white relative z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
           </div>
           <div>
-            <h1 class="font-display text-2xl font-bold text-capitol-900 dark:text-white tracking-tight">
+            <h1 class="font-display text-xl font-bold text-capitol-900 dark:text-white tracking-tight leading-none">
               AI Congress
             </h1>
-            <p class="text-xs font-medium text-capitol-500 dark:text-capitol-400 uppercase tracking-widest">
+            <p class="text-[0.65rem] font-medium text-capitol-500 dark:text-capitol-400 uppercase tracking-[0.15em] mt-0.5">
               Democratic Intelligence
             </p>
           </div>
@@ -90,29 +91,26 @@
 
         <!-- Center Stats -->
         {#if models.length > 0}
-          <div class="hidden md:flex items-center gap-6">
-            <div class="flex items-center gap-2 px-4 py-2 rounded-full bg-capitol-100 dark:bg-capitol-800/50 border border-capitol-200 dark:border-capitol-700">
-              <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span class="text-sm font-medium text-capitol-700 dark:text-capitol-300">
-                {models.length} Models Available
+          <div class="hidden md:flex items-center gap-4">
+            <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-capitol-100 dark:bg-capitol-800/50 border border-capitol-200 dark:border-capitol-700">
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span class="text-xs font-medium text-capitol-700 dark:text-capitol-300 tabular-nums">
+                {models.length} models
               </span>
             </div>
-            <div class="flex items-center gap-2 px-4 py-2 rounded-full bg-gold-100 dark:bg-gold-900/30 border border-gold-200 dark:border-gold-800">
-              <svg class="w-4 h-4 text-gold-600 dark:text-gold-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-              </svg>
-              <span class="text-sm font-medium text-gold-700 dark:text-gold-300">
-                {selectedModels.length} Active
+            <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gold-100 dark:bg-gold-900/30 border border-gold-200 dark:border-gold-800">
+              <span class="text-xs font-medium text-gold-700 dark:text-gold-300 tabular-nums">
+                {selectedModels.length} active
               </span>
             </div>
           </div>
         {/if}
 
         <!-- Controls -->
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <button
             on:click={toggleDarkMode}
-            class="p-2.5 rounded-xl bg-capitol-100 dark:bg-capitol-800 text-capitol-600 dark:text-capitol-400 hover:bg-capitol-200 dark:hover:bg-capitol-700 transition-all duration-200"
+            class="p-2 rounded-lg bg-capitol-100 dark:bg-capitol-800 text-capitol-600 dark:text-capitol-400 hover:bg-capitol-200 dark:hover:bg-capitol-700 transition-all duration-200 active:scale-95"
             aria-label="Toggle dark mode"
           >
             {#if darkMode}
@@ -130,7 +128,7 @@
             href="https://github.com/jasperan/ai-congress"
             target="_blank"
             rel="noopener noreferrer"
-            class="p-2.5 rounded-xl bg-capitol-100 dark:bg-capitol-800 text-capitol-600 dark:text-capitol-400 hover:bg-capitol-200 dark:hover:bg-capitol-700 transition-all duration-200"
+            class="p-2 rounded-lg bg-capitol-100 dark:bg-capitol-800 text-capitol-600 dark:text-capitol-400 hover:bg-capitol-200 dark:hover:bg-capitol-700 transition-all duration-200 active:scale-95"
             aria-label="View on GitHub"
           >
             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -143,25 +141,25 @@
   </nav>
 
   <!-- Main Content -->
-  <main class="max-w-7xl mx-auto px-6 lg:px-8 py-8 min-h-[calc(100vh-5rem)]">
+  <main id="main-content" class="max-w-7xl mx-auto px-6 lg:px-8 py-8 min-h-[calc(100dvh-4rem)]">
     {#if isLoading}
       <!-- Loading State -->
       <div class="flex items-center justify-center h-[60vh]">
-        <div class="text-center space-y-6">
-          <div class="relative w-24 h-24 mx-auto">
-            <div class="absolute inset-0 rounded-full border-4 border-capitol-200 dark:border-capitol-800"></div>
-            <div class="absolute inset-0 rounded-full border-4 border-gold-500 border-t-transparent animate-spin"></div>
-            <div class="absolute inset-4 rounded-full bg-gradient-to-br from-capitol-100 to-capitol-200 dark:from-capitol-800 dark:to-capitol-900 flex items-center justify-center">
-              <svg class="w-8 h-8 text-capitol-600 dark:text-capitol-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="text-center space-y-5">
+          <div class="relative w-20 h-20 mx-auto">
+            <div class="absolute inset-0 rounded-full border-2 border-capitol-200 dark:border-capitol-800"></div>
+            <div class="absolute inset-0 rounded-full border-2 border-gold-500 border-t-transparent animate-spin"></div>
+            <div class="absolute inset-3 rounded-full bg-capitol-100 dark:bg-capitol-800 flex items-center justify-center">
+              <svg class="w-7 h-7 text-capitol-600 dark:text-capitol-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
               </svg>
             </div>
           </div>
           <div>
-            <h3 class="font-display text-2xl font-semibold text-capitol-900 dark:text-white mb-2">
-              Assembling Congress...
+            <h3 class="font-display text-xl font-semibold text-capitol-900 dark:text-white mb-1.5">
+              Assembling Congress
             </h3>
-            <p class="text-capitol-500 dark:text-capitol-400">
+            <p class="text-sm text-capitol-500 dark:text-capitol-400">
               Gathering representatives from Ollama
             </p>
           </div>
@@ -233,10 +231,10 @@
     {:else}
       <!-- Tab Navigation -->
       <div class="mb-8">
-        <div class="inline-flex p-1.5 bg-capitol-100 dark:bg-capitol-800/50 rounded-2xl border border-capitol-200 dark:border-capitol-700">
+        <div class="inline-flex p-1 bg-capitol-100 dark:bg-capitol-800/50 rounded-xl border border-capitol-200 dark:border-capitol-700">
           <button
             on:click={() => activeTab = 'models'}
-            class="px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 {activeTab === 'models' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-md' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
+            class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'models' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
@@ -245,7 +243,7 @@
           </button>
           <button
             on:click={() => activeTab = 'personalities'}
-            class="px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-300 flex items-center gap-2 {activeTab === 'personalities' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-md' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
+            class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'personalities' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -267,20 +265,21 @@
   </main>
 
   <!-- Footer -->
-  <footer class="border-t border-capitol-200 dark:border-capitol-800 bg-white dark:bg-capitol-900">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-6">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-capitol-500 dark:text-capitol-400">
+  <footer class="border-t border-capitol-200 dark:border-capitol-800 bg-white/50 dark:bg-capitol-900/50">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-5">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-capitol-500 dark:text-capitol-400">
         <div class="flex items-center gap-2">
           <span class="font-display font-semibold text-capitol-700 dark:text-capitol-300">AI Congress</span>
-          <span class="text-capitol-300 dark:text-capitol-600">•</span>
-          <span>Open Source Democracy</span>
+          <span class="opacity-30">|</span>
+          <span>Open-source multi-agent system</span>
         </div>
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-4">
           <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" class="hover:text-capitol-700 dark:hover:text-capitol-300 transition-colors">
             Powered by Ollama
           </a>
-          <span class="text-gold-500">✦</span>
-          <span>Built for the People</span>
+          <a href="https://github.com/jasperan/ai-congress" target="_blank" rel="noopener noreferrer" class="hover:text-capitol-700 dark:hover:text-capitol-300 transition-colors">
+            GitHub
+          </a>
         </div>
       </div>
     </div>
@@ -301,7 +300,7 @@
     --color-capitol-800: #1e293b;
     --color-capitol-900: #0f172a;
     --color-capitol-950: #020617;
-    
+
     --color-gold-100: #fef3c7;
     --color-gold-200: #fde68a;
     --color-gold-300: #fcd34d;
@@ -329,11 +328,11 @@
   :global(.bg-capitol-800) { background-color: var(--color-capitol-800); }
   :global(.bg-capitol-900) { background-color: var(--color-capitol-900); }
   :global(.bg-capitol-950) { background-color: var(--color-capitol-950); }
-  
+
   :global(.bg-gold-100) { background-color: var(--color-gold-100); }
   :global(.bg-gold-500) { background-color: var(--color-gold-500); }
   :global(.bg-gold-900\/30) { background-color: rgba(69, 26, 3, 0.3); }
-  
+
   :global(.text-capitol-200) { color: var(--color-capitol-200); }
   :global(.text-capitol-300) { color: var(--color-capitol-300); }
   :global(.text-capitol-400) { color: var(--color-capitol-400); }
@@ -342,29 +341,48 @@
   :global(.text-capitol-700) { color: var(--color-capitol-700); }
   :global(.text-capitol-800) { color: var(--color-capitol-800); }
   :global(.text-capitol-900) { color: var(--color-capitol-900); }
-  
+
   :global(.text-gold-300) { color: var(--color-gold-300); }
   :global(.text-gold-400) { color: var(--color-gold-400); }
   :global(.text-gold-500) { color: var(--color-gold-500); }
   :global(.text-gold-600) { color: var(--color-gold-600); }
   :global(.text-gold-700) { color: var(--color-gold-700); }
-  
+
   :global(.border-capitol-200) { border-color: var(--color-capitol-200); }
   :global(.border-capitol-300) { border-color: var(--color-capitol-300); }
   :global(.border-capitol-700) { border-color: var(--color-capitol-700); }
   :global(.border-capitol-800) { border-color: var(--color-capitol-800); }
   :global(.border-gold-200) { border-color: var(--color-gold-200); }
   :global(.border-gold-800) { border-color: var(--color-gold-800); }
-  
+
   :global(.shadow-capitol-500\/20) { box-shadow: 0 10px 15px -3px rgba(100, 116, 139, 0.2); }
   :global(.shadow-capitol-600\/25) { box-shadow: 0 10px 15px -3px rgba(71, 85, 105, 0.25); }
 
   @keyframes fade-in {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
   :global(.animate-fade-in) {
-    animation: fade-in 0.4s ease-out forwards;
+    animation: fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  :global(.tabular-nums) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :global(.active\:scale-95:active) {
+    transform: scale(0.95);
+  }
+
+  :global(.active\:scale-\[0\.98\]:active) {
+    transform: scale(0.98);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(*) {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 </style>

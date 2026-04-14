@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "AI Congress — Interactive Explorer",
   description:
     "Explore how autonomous LLM agents debate, vote, reason, and reach consensus. 10 interactive widgets covering swarm intelligence, semantic voting, multi-round debate, agent reasoning, and congressional simulation.",
+  openGraph: {
+    title: "AI Congress — Interactive Explorer",
+    description: "10 interactive widgets: swarm intelligence, semantic voting, multi-round debate, agent reasoning, and congressional simulation.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
