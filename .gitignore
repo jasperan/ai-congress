@@ -245,3 +245,6 @@ tui-rs/target/
 
 # Local agent directories
 .pi/
+
+# Generated content (local only)
+content/

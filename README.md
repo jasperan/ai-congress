@@ -63,7 +63,7 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 ## Quick Start
 
 <!-- one-command-install -->
-> **One-command install** — clone, configure, and run in a single step:
+> **One-command install**: clone, configure, and run in a single step:
 >
 > ```bash
 > curl -fsSL https://raw.githubusercontent.com/jasperan/ai-congress/main/install.sh | bash
