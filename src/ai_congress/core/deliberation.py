@@ -82,6 +82,17 @@ STEELMAN_TEMPLATE = (
     "User's question:\n{question}"
 )
 
+STEELMAN_NO_DISSENT_TEMPLATE = (
+    "The council is converging too fast and nobody dissented in Round 1. "
+    "Your assignment is to invent the strongest counter-position an expert "
+    "outside this room would hold. Here is the current majority position:\n\n"
+    "{majority}\n\n"
+    "In under 200 words, make the best possible case AGAINST the majority. "
+    "Invent the missing dissenter. Stay technical, specific, and in good faith. "
+    "Do not hedge.\n\n"
+    "User's question:\n{question}"
+)
+
 
 @dataclass
 class DeliberationConfig:
@@ -150,17 +161,27 @@ def _parse_restate(raw: str) -> Tuple[str, str]:
 
 
 def _count_divergent_restates(restates: List[Dict], threshold: float = 0.55) -> int:
-    """Count restatements that diverge lexically from the modal phrasing."""
-    from .consensus_detector import _jaccard
-    texts = [(r.get("restate") or "") + " " + (r.get("alt_framing") or "") for r in restates]
+    """Count restatements that diverge lexically from the modal phrasing.
+
+    Failed restates (success=False) are ignored. For short restatements
+    (<12 tokens combined) we tighten the threshold so a single synonym
+    swap doesn't falsely trip the divergence warning.
+    """
+    from .consensus_detector import _jaccard, _tokens
+    usable = [r for r in restates if r.get("success", True)]
+    texts = [
+        (r.get("restate") or "") + " " + (r.get("alt_framing") or "")
+        for r in usable
+    ]
     if len(texts) < 2:
         return 0
-    # Use average pairwise similarity of each restate against the rest; low
-    # similarity means the agent saw a different question.
     divergent = 0
     for i, t in enumerate(texts):
+        t_tokens = _tokens(t)
+        short = len(t_tokens) < 12
+        effective_threshold = threshold * 0.6 if short else threshold
         sims = [_jaccard(t, texts[j]) for j in range(len(texts)) if j != i]
-        if sims and (sum(sims) / len(sims)) < threshold:
+        if sims and (sum(sims) / len(sims)) < effective_threshold:
             divergent += 1
     return divergent
 
@@ -317,12 +338,26 @@ class DeliberationOrchestrator:
         majority_txt = texts[majority_idx]
         outlier_txt = texts[outlier_idx]
 
+        # When all outputs collapse to the same text the "outlier" is just the
+        # majority in disguise. Swap to a template that asks the picks to
+        # invent an outside dissenter instead of restating the majority.
+        use_no_dissent = (
+            majority_txt.strip() == outlier_txt.strip()
+            or report.agreement_ratio >= 0.98
+        )
+
         async def steelman(i: int) -> Dict:
-            prompt = STEELMAN_TEMPLATE.format(
-                majority=majority_txt,
-                outlier=outlier_txt,
-                question=question,
-            )
+            if use_no_dissent:
+                prompt = STEELMAN_NO_DISSENT_TEMPLATE.format(
+                    majority=majority_txt,
+                    question=question,
+                )
+            else:
+                prompt = STEELMAN_TEMPLATE.format(
+                    majority=majority_txt,
+                    outlier=outlier_txt,
+                    question=question,
+                )
             return await self._ask(agents[i], prompt, temperature=min(1.0, temperature + 0.1))
 
         outputs = await asyncio.gather(*[steelman(i) for i in picks])

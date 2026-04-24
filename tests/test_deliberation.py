@@ -160,6 +160,66 @@ class TestDeliberationOrchestrator:
         assert r1.endswith("[...]")
         assert len(r1.split()) <= 55  # 50 + the truncation suffix
 
+    def test_steelman_no_dissent_template_when_identical(self):
+        """When all agents collapse to the same text, steelman must not ask
+        them to argue against their own position."""
+        agents = [{"role": f"m{i}"} for i in range(3)]
+        script = {(f"m{i}", "r1"): "exactly identical identical identical" for i in range(3)}
+
+        captured_prompts = []
+
+        async def spying_fn(agent, messages, temperature):
+            user = messages[-1]["content"]
+            role = agent["role"]
+            if "Round 2" in user:
+                return {"response": f"{role} r2", "success": True}
+            if "Round 3" in user:
+                return {"response": f"{role} r3 recommend X", "success": True}
+            if "RESTATE:" in user:
+                return {"response": f"RESTATE: q\nALT_FRAMING: q2", "success": True}
+            # Capture steelman prompts
+            if "strongest opposing" in user or "strongest counter-position" in user:
+                captured_prompts.append(user)
+                return {"response": f"{role} steelman", "success": True}
+            # Round 1
+            return {"response": script.get((role, "r1"), "identical"), "success": True}
+
+        config = DeliberationConfig(
+            embedding_model="",
+            restate_gate_enabled=False,
+            dissent_quota_enabled=True,
+            consensus_threshold=0.1,
+            pairwise_threshold=0.1,
+            dissent_steelman_count=2,
+        )
+        orc = DeliberationOrchestrator(query_fn=spying_fn, config=config)
+        result = asyncio.run(orc.run(agents=agents, question="q"))
+        assert result.steelman is not None
+        assert len(captured_prompts) == 2
+        # No-dissent template should be used (invent counter-position)
+        assert all("counter-position" in p for p in captured_prompts)
+        # Regular template should NOT be used here
+        assert not any("diverged most" in p for p in captured_prompts)
+
+    def test_restate_divergence_ignores_failed(self):
+        restates_with_failure = [
+            {"restate": "wildly different alpha", "alt_framing": "", "success": False},
+            {"restate": "wildly different alpha", "alt_framing": "", "success": True},
+            {"restate": "wildly different alpha", "alt_framing": "", "success": True},
+        ]
+        # Failed restate should not count — 2 identical successful restates = 0 divergent
+        assert _count_divergent_restates(restates_with_failure, threshold=0.55) == 0
+
+    def test_restate_short_text_threshold_tightened(self):
+        # Short 3-token restates that differ by one word shouldn't trip divergence
+        restates = [
+            {"restate": "memory profiler needed", "alt_framing": ""},
+            {"restate": "memory profiler required", "alt_framing": ""},
+            {"restate": "memory profiler advised", "alt_framing": ""},
+        ]
+        # With the tightened short-text threshold, these are NOT divergent
+        assert _count_divergent_restates(restates, threshold=0.55) == 0
+
     def test_restate_warning_fires_when_divergent(self):
         agents = [
             {"role": "alpha"},
