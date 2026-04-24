@@ -18,6 +18,12 @@ import questionary
 from ..core.model_registry import ModelRegistry
 from ..core.voting_engine import VotingEngine
 from ..core.swarm_orchestrator import SwarmOrchestrator
+from ..core.triads import (
+    TriadError,
+    describe_triad,
+    list_triads,
+    resolve_triad,
+)
 from ..utils.config_loader import load_config
 from ..tui.theme import PI_THEME, PI_COLORS, EVENT_ICONS
 from ..tui.components import (
@@ -48,7 +54,7 @@ def callback():
 
 
 # Move async functions OUT of the commands so they can be reused
-async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, inference_backend="ollama"):
+async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, inference_backend="ollama", triad=None):
     try:
         # Apply the chosen inference backend
         swarm.inference_backend = inference_backend
@@ -56,7 +62,34 @@ async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, per
         # Load model weights
         await model_registry.load_benchmark_weights("config/models_benchmark.json")
 
-        if stream:
+        # --triad is sugar for deliberation mode with the triad's agents
+        triad_agents = None
+        if triad:
+            try:
+                available = [
+                    m.get("name") for m in await model_registry.list_available_models()
+                ]
+                triad_agents = resolve_triad(
+                    triad,
+                    fallback_model=config.agents.base_model,
+                    available_models=available or None,
+                )
+                mode = "deliberation"
+                info = describe_triad(triad)
+                console.print(
+                    f"[pi.accent]triad[/pi.accent] "
+                    f"[pi.dim]{triad}[/pi.dim]: {info['description']}"
+                )
+                console.print(
+                    "[pi.dim]members: "
+                    + ", ".join(f"{a['role']}@{a['model']}" for a in triad_agents)
+                    + "[/pi.dim]"
+                )
+            except TriadError as exc:
+                console.print(f"[pi.error]{exc}[/pi.error]")
+                return
+
+        if stream and mode != "deliberation":
             # Streaming mode
             dynamic_border(console, "streaming", style="pi.border")
             console.print(f"[pi.accent]Streaming individual responses...[/pi.accent]")
@@ -69,11 +102,38 @@ async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, per
                 console=console,
                 disable=not verbose
             ) as progress:
-                task = progress.add_task(
-                    f"[{PI_COLORS['cyan']}]Querying models...[/]", total=None
+                task_label = (
+                    f"[{PI_COLORS['cyan']}]Deliberating across {len(triad_agents)} members...[/]"
+                    if triad_agents else
+                    f"[{PI_COLORS['cyan']}]Querying models...[/]"
                 )
+                task = progress.add_task(task_label, total=None)
 
-                if mode == "multi_model":
+                if mode == "deliberation":
+                    if triad_agents is None:
+                        # Allow --mode deliberation without a triad: build agents
+                        # from --model list with neutral role prompts.
+                        if not models:
+                            console.print("[pi.error]deliberation needs --triad or at least 2 models via -m[/pi.error]")
+                            return
+                        triad_agents = [
+                            {
+                                "role": f"member_{i+1}",
+                                "name": f"member_{i+1}@{m}",
+                                "model": m,
+                                "system_prompt": (
+                                    f"You are council member {i+1}. Offer an independent analysis "
+                                    "of the user's question. Be concrete and flag what you're unsure about."
+                                ),
+                            }
+                            for i, m in enumerate(models)
+                        ]
+                    result = await swarm.deliberation_swarm(
+                        agents=triad_agents,
+                        prompt=prompt,
+                        temperature=temperature,
+                    )
+                elif mode == "multi_model":
                     result = await swarm.multi_model_swarm(models=models, prompt=prompt, temperature=temperature, reasoning_mode=reasoning)
                 elif mode == "multi_request":
                     result = await swarm.multi_request_swarm(model=models[0] if models else "mistral:7b", prompt=prompt, temperature=temperature)
@@ -104,6 +164,14 @@ async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, per
             # Display results
             if result.get('final_answer', '').startswith("Error"):
                 console.print(f"[pi.error]{result.get('final_answer')}[/pi.error]")
+                return
+
+            # Deliberation mode has a richer verdict that LEADS with what the
+            # council couldn't resolve -- print it verbatim and return.
+            if result.get('mode') == 'deliberation':
+                dynamic_border(console, "deliberation verdict", style="pi.border")
+                console.print(result.get('verdict') or result.get('final_answer', ''))
+                dynamic_border(console, style="pi.border.dim")
                 return
 
             if verbose:
@@ -138,14 +206,35 @@ def chat(
     prompt: str = typer.Argument(..., help="The prompt to send to the swarm"),
     models: List[str] = typer.Option(["phi3:3.8b", "mistral:7b"], "--model", "-m", help="Models to use in swarm"),
     personalities: List[str] = typer.Option([], "--personality", "-p", help="Personalities to use in personality mode"),
-    mode: str = typer.Option("multi_model", "--mode", help="Swarm mode: multi_model, multi_request, hybrid, personality"),
+    mode: str = typer.Option("multi_model", "--mode", help="Swarm mode: multi_model, multi_request, hybrid, personality, deliberation"),
     temperature: float = typer.Option(0.7, "--temp", "-t", help="Temperature for models"),
     stream: bool = typer.Option(False, "--stream", "-s", help="Stream responses in real-time"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
-    reasoning: Optional[str] = typer.Option(None, "--reasoning", "-r", help="Reasoning mode: cot, react")
+    reasoning: Optional[str] = typer.Option(None, "--reasoning", "-r", help="Reasoning mode: cot, react"),
+    triad: Optional[str] = typer.Option(None, "--triad", help="Run a 3-member deliberation. Use --triad list to see available names"),
 ):
     """Interactive chat with LLM swarm"""
-    asyncio.run(run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning))
+    if triad == "list":
+        names = list_triads()
+        console.print("[pi.accent]Available triads:[/pi.accent]")
+        for name in names:
+            info = describe_triad(name)
+            console.print(f"  [pi.dim]{name}[/pi.dim]: {info['description']}")
+        return
+    asyncio.run(run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, triad=triad))
+
+
+@app.command()
+def triads():
+    """List all available deliberation triads"""
+    names = list_triads()
+    dynamic_border(console, "deliberation triads", style="pi.border")
+    for name in names:
+        info = describe_triad(name)
+        roles = " + ".join(info["roles"])
+        console.print(f"  [{PI_COLORS['cyan']}]{name}[/] [pi.dim]({roles})[/pi.dim]")
+        console.print(f"    [pi.dim]{info['description']}[/pi.dim]")
+    dynamic_border(console, style="pi.border.dim")
 
 @app.command()
 def models():

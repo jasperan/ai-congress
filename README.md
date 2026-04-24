@@ -51,7 +51,8 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 
 ## Key Capabilities
 
-- **5 Swarm Modes**: Multi-model, multi-request, hybrid, personality, enhanced (with all 35 improvements)
+- **6 Swarm Modes**: Multi-model, multi-request, hybrid, personality, enhanced, and a 3-round `deliberation` mode with Problem Restate Gate, cross-examination, and Dissent Quota (borrowed from [council-of-high-intelligence](https://github.com/0xNyk/council-of-high-intelligence))
+- **20 Pre-Defined Triads**: `architecture`, `strategy`, `ethics`, `debugging`, `risk`, `shipping`, `product`, `ai-product`, `blind-spots`, and 11 more, each pairing 3 archetypes with deliberate tension
 - **Semantic Voting**: LLM-based clustering groups responses by meaning, not string matching
 - **Multi-Round Debate**: Pressure prompts, conviction tracking, devil's advocate protocol
 - **Role-Based Agents**: Planner, Worker, Critic, Judge, Synthesizer with personality-driven assignment
@@ -107,7 +108,32 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 ./run_cli.py chat "Solve this puzzle..." --reasoning cot
 ./run_cli.py chat "Calculate 25 * 48" --reasoning react
 ./run_cli.py models                                 # List available models
+./run_cli.py triads                                 # List 20 deliberation triads
+./run_cli.py chat "monolith or microservices?" --triad architecture
+./run_cli.py chat "why is my async code leaking memory?" --triad debugging
 ```
+
+#### Deliberation Mode (council-style 3-round debate)
+
+Deliberation is a mode inspired by [council-of-high-intelligence](https://github.com/0xNyk/council-of-high-intelligence). Instead of querying several models in parallel and voting, the council actually argues:
+
+1. **Problem Restate Gate** runs first. Every member restates the question and offers one alternative framing. If 3 or more diverge, you get a "question-reframing" warning at the top of the verdict. Usually that means the question itself was the problem.
+2. **Round 1: independent analysis** (400 words max, parallel via `asyncio.gather`). Nobody sees anyone else yet.
+3. **Round 2: cross-examination** (300 words max). Each member has to engage at least 2 peers by name.
+4. **Round 3: final crystallization** (100 words max). Each member states their final position and the single assumption that would make them wrong.
+5. **Dissent Quota**: if pairwise agreement after Round 1 exceeds `consensus_threshold` (default 0.7), 2 members are forced to steelman the strongest opposing view. The steelman pass is appended to the verdict, so hidden disagreement surfaces instead of being hidden behind a confident-looking vote.
+
+Verdicts lead with **Unresolved Questions** and **Recommended Next Steps**, not with consensus. The weighted winner is placed last, because what the council can't answer matters more than where it agrees.
+
+```bash
+# Use a pre-defined triad (recommended)
+./run_cli.py chat "Should we accept the acquisition offer?" --triad strategy
+
+# Or build a custom deliberation from specific models
+./run_cli.py chat "How should we migrate?" --mode deliberation -m qwen3.5:9b -m gemma4:latest -m qwen3:4b
+```
+
+Triads live in `config/triads.json`. Each one pairs 3 archetypes (Classifier, Empiricist, Formalist, Pragmatist, Reframer, Bias Hunter, Adversary, and more) with tension designed to surface different reasoning paths. The knobs live under `deliberation:` in `config/config.yaml`.
 
 #### Web Interface
 

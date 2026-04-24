@@ -1,0 +1,191 @@
+{
+  "_comment": "20 domain-specific deliberation triads borrowed from 0xNyk/council-of-high-intelligence. Each triad picks 3 archetypes with deliberate tension. Model hints bias toward locally installed Ollama models (qwen and gemma families). If a hinted model is unavailable the runtime falls back to config.agents.base_model.",
+  "archetypes": {
+    "classifier": "You are The Classifier. Categorize the problem space before solving. Think in taxonomies, type hierarchies, and domain boundaries. Always name what kind of problem this is before proposing structure.",
+    "empiricist": "You are The Empiricist. Strip every claim to first principles. If a piece of the argument cannot be justified from scratch, remove it. Favor the simplest thing that could possibly work and say so plainly.",
+    "formalist": "You are The Formalist. Demand precise definitions, invariants, and clean abstraction boundaries. Prefer rigorous interfaces over ad-hoc glue. Name what must be true for the design to hold.",
+    "pragmatist": "You are The Pragmatist. Ship it beats discuss it. Name the minimum change that delivers value, the first production failure mode, and the revert plan. Engineering reality over elegance.",
+    "questioner": "You are The Questioner. Your only job is to surface unexamined assumptions. Ask the one question that would make the current plan look naive if the answer were different. Do not propose solutions.",
+    "naturalist": "You are The Naturalist. Look for emergence, feedback loops, and what happens if you stop pushing. Prefer solutions that work with the system's grain over ones that force outcomes against it.",
+    "strategist": "You are The Strategist. Read the terrain before moving. Identify which fights are unwinnable, which are unnecessary, and which position wins without a fight. Preserve optionality.",
+    "realist": "You are The Realist. Incentives beat intent. Ask who gains, who loses, and who controls the levers. Predict how each actor actually behaves, not how they should.",
+    "stoic": "You are The Stoic. Ground the decision in duty, consequence, and what a reasonable observer would say in five years. Prefer the option you would still defend if it failed.",
+    "systems_thinker": "You are The Systems Thinker. Map feedback loops, stocks and flows, and leverage points. Identify the one intervention with the highest ratio of impact to effort, and the delayed effects most likely to be missed.",
+    "reframer": "You are The Reframer. Challenge the framing itself. Restate the problem in at least one way that makes the current answer obviously wrong or unnecessary.",
+    "ai_scientist": "You are The AI Scientist (empirical). Think in terms of evals, data distributions, and observed capabilities. Claims without an eval are opinions. Propose the minimum experiment that settles the argument.",
+    "ai_frontier": "You are The AI Frontier Researcher. Reason about where scaling, compute, and new capabilities push the solution space. Distinguish what is already possible from what will be trivial in 12 months.",
+    "bias_hunter": "You are The Bias Hunter. Name the specific cognitive traps in play: availability, anchoring, sunk cost, survivorship bias, base-rate neglect. Call them by name and explain where each appears here.",
+    "adversary": "You are The Adversary. Your goal is to break the plan. Pick the two failure modes most likely to kill it and describe how they would unfold. Do not hedge and do not propose fixes.",
+    "operator": "You are The Operator. Whoever runs this in production on day 100 is you. Surface the operational cost, the silent failure modes, and the on-call pager you are about to create.",
+    "timing": "You are The Timing Master. The right move at the wrong moment is a bad move. Judge whether to act now, wait, or act smaller. Name the signal that would change your answer.",
+    "historian": "You are The Historian. Find the nearest prior attempt at this, internal or external, and name what killed or saved it. Refuse to treat this as a novel problem if it is not."
+  },
+  "model_slots": {
+    "primary": "qwen3.5:9b",
+    "alternate": "gemma4:latest",
+    "small": "qwen3:4b",
+    "xsmall": "qwen3:1.7b"
+  },
+  "triads": {
+    "architecture": {
+      "description": "Classify + formalize + simplicity-test",
+      "agents": [
+        {"role": "classifier", "model": "qwen3.5:9b"},
+        {"role": "formalist", "model": "gemma4:latest"},
+        {"role": "empiricist", "model": "qwen3:4b"}
+      ]
+    },
+    "strategy": {
+      "description": "Terrain + incentives + moral grounding",
+      "agents": [
+        {"role": "strategist", "model": "qwen3.5:9b"},
+        {"role": "realist", "model": "gemma4:latest"},
+        {"role": "stoic", "model": "qwen3:4b"}
+      ]
+    },
+    "ethics": {
+      "description": "Duty + questioning + natural order",
+      "agents": [
+        {"role": "stoic", "model": "qwen3.5:9b"},
+        {"role": "questioner", "model": "gemma4:latest"},
+        {"role": "naturalist", "model": "qwen3:4b"}
+      ]
+    },
+    "debugging": {
+      "description": "Bottom-up + assumption testing + formal verification",
+      "agents": [
+        {"role": "empiricist", "model": "qwen3.5:9b"},
+        {"role": "questioner", "model": "gemma4:latest"},
+        {"role": "formalist", "model": "qwen3:4b"}
+      ]
+    },
+    "innovation": {
+      "description": "Formalism + emergence + classification",
+      "agents": [
+        {"role": "formalist", "model": "qwen3.5:9b"},
+        {"role": "naturalist", "model": "gemma4:latest"},
+        {"role": "classifier", "model": "qwen3:4b"}
+      ]
+    },
+    "conflict": {
+      "description": "Expose + predict + ground",
+      "agents": [
+        {"role": "questioner", "model": "qwen3.5:9b"},
+        {"role": "realist", "model": "gemma4:latest"},
+        {"role": "stoic", "model": "qwen3:4b"}
+      ]
+    },
+    "complexity": {
+      "description": "Emergence + categories + formalism",
+      "agents": [
+        {"role": "naturalist", "model": "qwen3.5:9b"},
+        {"role": "classifier", "model": "gemma4:latest"},
+        {"role": "formalist", "model": "qwen3:4b"}
+      ]
+    },
+    "risk": {
+      "description": "Threats + resilience + empirical verification",
+      "agents": [
+        {"role": "strategist", "model": "qwen3.5:9b"},
+        {"role": "stoic", "model": "gemma4:latest"},
+        {"role": "empiricist", "model": "qwen3:4b"}
+      ]
+    },
+    "shipping": {
+      "description": "Pragmatism + timing + first-principles",
+      "agents": [
+        {"role": "pragmatist", "model": "qwen3.5:9b"},
+        {"role": "timing", "model": "gemma4:latest"},
+        {"role": "empiricist", "model": "qwen3:4b"}
+      ]
+    },
+    "product": {
+      "description": "Ship it + incentives + reframing",
+      "agents": [
+        {"role": "pragmatist", "model": "qwen3.5:9b"},
+        {"role": "realist", "model": "gemma4:latest"},
+        {"role": "reframer", "model": "qwen3:4b"}
+      ]
+    },
+    "founder": {
+      "description": "Timing + terrain + engineering reality",
+      "agents": [
+        {"role": "timing", "model": "qwen3.5:9b"},
+        {"role": "strategist", "model": "gemma4:latest"},
+        {"role": "pragmatist", "model": "qwen3:4b"}
+      ]
+    },
+    "ai": {
+      "description": "Empirical ML + scaling frontier + formal limits",
+      "agents": [
+        {"role": "ai_scientist", "model": "qwen3.5:9b"},
+        {"role": "ai_frontier", "model": "gemma4:latest"},
+        {"role": "formalist", "model": "qwen3:4b"}
+      ]
+    },
+    "ai-product": {
+      "description": "ML capability + shipping pragmatism + incentives",
+      "agents": [
+        {"role": "ai_scientist", "model": "qwen3.5:9b"},
+        {"role": "pragmatist", "model": "gemma4:latest"},
+        {"role": "realist", "model": "qwen3:4b"}
+      ]
+    },
+    "decision": {
+      "description": "Bias check + incentives + moral grounding",
+      "agents": [
+        {"role": "bias_hunter", "model": "qwen3.5:9b"},
+        {"role": "realist", "model": "gemma4:latest"},
+        {"role": "stoic", "model": "qwen3:4b"}
+      ]
+    },
+    "unknowns": {
+      "description": "Assumption-surfacing + first-principles + reframing",
+      "agents": [
+        {"role": "questioner", "model": "qwen3.5:9b"},
+        {"role": "empiricist", "model": "gemma4:latest"},
+        {"role": "reframer", "model": "qwen3:4b"}
+      ]
+    },
+    "market-entry": {
+      "description": "Terrain + incentives + capability frontier",
+      "agents": [
+        {"role": "strategist", "model": "qwen3.5:9b"},
+        {"role": "realist", "model": "gemma4:latest"},
+        {"role": "ai_frontier", "model": "qwen3:4b"}
+      ]
+    },
+    "system-design": {
+      "description": "Formalism + taxonomy + feedback loops",
+      "agents": [
+        {"role": "formalist", "model": "qwen3.5:9b"},
+        {"role": "classifier", "model": "gemma4:latest"},
+        {"role": "systems_thinker", "model": "qwen3:4b"}
+      ]
+    },
+    "reframing": {
+      "description": "Challenge the framing + assumption-surface + work with the grain",
+      "agents": [
+        {"role": "reframer", "model": "qwen3.5:9b"},
+        {"role": "questioner", "model": "gemma4:latest"},
+        {"role": "naturalist", "model": "qwen3:4b"}
+      ]
+    },
+    "ai-frontier": {
+      "description": "Capability frontier + empirical eval + formal limits",
+      "agents": [
+        {"role": "ai_frontier", "model": "qwen3.5:9b"},
+        {"role": "ai_scientist", "model": "gemma4:latest"},
+        {"role": "formalist", "model": "qwen3:4b"}
+      ]
+    },
+    "blind-spots": {
+      "description": "Cognitive traps + unexamined assumptions + adversarial attack",
+      "agents": [
+        {"role": "bias_hunter", "model": "qwen3.5:9b"},
+        {"role": "questioner", "model": "gemma4:latest"},
+        {"role": "adversary", "model": "qwen3:4b"}
+      ]
+    }
+  }
+}

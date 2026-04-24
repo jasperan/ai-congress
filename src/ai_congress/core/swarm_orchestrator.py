@@ -9,6 +9,11 @@ from .voting_engine import VotingEngine
 from .model_registry import ModelRegistry
 from .semantic_voting import SemanticVotingEngine, ModelResponse
 from .debate_manager import DebateManager, DebateConfig
+from .deliberation import (
+    DeliberationConfig,
+    DeliberationOrchestrator,
+    DeliberationResult,
+)
 from .ollama_client import OllamaClient
 from .openai_client import OpenAIClient
 from ..utils.config_loader import OllamaConfig, OpenAIConfig, load_config
@@ -784,4 +789,142 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             'personalities_used': personality_names,
             'base_model': base_model,
             'weights': weights
+        }
+
+    async def deliberation_swarm(
+        self,
+        agents: List[Dict[str, str]],
+        prompt: str,
+        temperature: float = 0.7,
+        deliberation_config: Optional[DeliberationConfig] = None,
+    ) -> Dict:
+        """3-round structured deliberation with Problem Restate Gate and Dissent Quota.
+
+        Each agent has {role, model, system_prompt}. The orchestrator runs an
+        optional pre-gate that checks whether the council reframes the question
+        divergently, then Round 1 (independent), Round 2 (cross-examination),
+        Round 3 (final positions). If premature consensus is detected after
+        Round 1 a steelman dissent pass is inserted.
+        """
+        if not agents:
+            return {
+                'responses': [],
+                'final_answer': "Error: deliberation needs agents",
+                'confidence': 0.0,
+                'mode': 'deliberation',
+            }
+
+        async def query_fn(agent: Dict, messages: List[Dict[str, str]], temp: float) -> Dict:
+            model = agent.get('model') or config.agents.base_model
+            return await self.query_model(
+                model,
+                messages=messages,
+                temperature=temp,
+                entity_name=agent.get('name') or agent.get('role'),
+            )
+
+        if deliberation_config is None:
+            cfg_yaml = getattr(config, "deliberation", None)
+            if cfg_yaml is not None:
+                deliberation_config = DeliberationConfig(
+                    consensus_threshold=cfg_yaml.consensus_threshold,
+                    pairwise_threshold=cfg_yaml.pairwise_threshold,
+                    embedding_model=cfg_yaml.embedding_model,
+                    restate_gate_enabled=cfg_yaml.restate_gate_enabled,
+                    restate_divergence_min=cfg_yaml.restate_divergence_min,
+                    dissent_quota_enabled=cfg_yaml.dissent_quota_enabled,
+                    dissent_steelman_count=cfg_yaml.dissent_steelman_count,
+                    round1_word_limit=cfg_yaml.round1_word_limit,
+                    round2_word_limit=cfg_yaml.round2_word_limit,
+                    round3_word_limit=cfg_yaml.round3_word_limit,
+                )
+            else:
+                deliberation_config = DeliberationConfig()
+
+        orchestrator = DeliberationOrchestrator(
+            query_fn=query_fn,
+            config=deliberation_config,
+        )
+
+        info_message(
+            "SWARM_START",
+            f"Deliberation ({len(agents)} members)",
+            f"3-round protocol, temperature={temperature}",
+            config.logging.verbosity,
+        )
+        result: DeliberationResult = await orchestrator.run(
+            agents=agents, question=prompt, temperature=temperature,
+        )
+
+        # Build vote input from Round 3 (final crystallization)
+        successful_final = [o for o in result.final_positions if o.get('success')]
+        texts = [o['response'] for o in successful_final]
+        agent_names = [o.get('agent') for o in successful_final]
+        weights = [
+            self.model_registry.get_model_weight(o.get('model') or '') or 1.0
+            for o in successful_final
+        ]
+        if texts:
+            final_answer, confidence, vote_breakdown = self.voting_engine.weighted_majority_vote(
+                texts, weights, agent_names,
+            )
+        else:
+            final_answer, confidence, vote_breakdown = (
+                "Error: no final positions returned", 0.0, {},
+            )
+
+        verdict = self.voting_engine.deliberation_verdict(
+            question=prompt,
+            final_positions=result.final_positions,
+            restate=(
+                {
+                    'divergent_count': result.restate.divergent_count,
+                    'warning': result.restate.warning,
+                    'restates': result.restate.restates,
+                } if result.restate else None
+            ),
+            dissent_report=(result.dissent_report.to_dict() if result.dissent_report else None),
+            steelman=(
+                [o for o in result.steelman.outputs] if result.steelman else None
+            ),
+            final_answer=final_answer,
+        )
+
+        info_message(
+            "SWARM_COMPLETE",
+            "Deliberation",
+            f"Confidence: {confidence:.2f}. "
+            f"Restate warning: {'yes' if (result.restate and result.restate.warning) else 'no'}. "
+            f"Steelman: {'yes' if result.steelman else 'no'}.",
+            config.logging.verbosity,
+        )
+
+        return {
+            'mode': 'deliberation',
+            'responses': [
+                {'model': o.get('model'), 'agent': o.get('agent'),
+                 'response': o.get('response', ''), 'success': o.get('success', False)}
+                for o in result.final_positions
+            ],
+            'rounds': [
+                {'name': r.name, 'outputs': r.outputs}
+                for r in result.rounds
+            ],
+            'restate': (
+                {
+                    'divergent_count': result.restate.divergent_count,
+                    'warning': result.restate.warning,
+                    'restates': result.restate.restates,
+                } if result.restate else None
+            ),
+            'dissent_report': (result.dissent_report.to_dict() if result.dissent_report else None),
+            'steelman': (
+                [o for o in result.steelman.outputs] if result.steelman else None
+            ),
+            'final_answer': final_answer,
+            'verdict': verdict,
+            'confidence': confidence,
+            'vote_breakdown': vote_breakdown,
+            'agents_used': [a.get('name') or a.get('role') for a in agents],
+            'metadata': result.metadata,
         }

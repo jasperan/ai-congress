@@ -50,6 +50,20 @@ class VotingConfig(BaseModel):
     debate: DebateVotingConfig = Field(default_factory=DebateVotingConfig)
 
 
+class DeliberationConfigModel(BaseModel):
+    """3-round deliberation mode (problem restate gate + dissent quota)."""
+    consensus_threshold: float = 0.7
+    pairwise_threshold: float = 0.7
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    restate_gate_enabled: bool = True
+    restate_divergence_min: int = 3
+    dissent_quota_enabled: bool = True
+    dissent_steelman_count: int = 2
+    round1_word_limit: int = 400
+    round2_word_limit: int = 300
+    round3_word_limit: int = 100
+
+
 class ModelWeights(BaseModel):
     preferred: list = Field(default_factory=lambda: ["phi3:3.8b", "mistral:7b", "llama3.2:3b"])
     weights: Dict[str, float] = Field(default_factory=dict)
@@ -161,6 +175,7 @@ class Config(BaseModel):
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
     voting: VotingConfig = Field(default_factory=VotingConfig)
+    deliberation: DeliberationConfigModel = Field(default_factory=DeliberationConfigModel)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     models: ModelWeights = Field(default_factory=ModelWeights)
     api: APIConfig = Field(default_factory=APIConfig)
