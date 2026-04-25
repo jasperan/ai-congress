@@ -51,25 +51,22 @@
 </script>
 
 <!--
-  DESIGN SYSTEM: Capitol Modern
-  Aesthetic: Government architecture meets futuristic civic tech
-  Inspiration: US Capitol building geometry + modern democratic transparency
-  Colors: Deep navy (#0f172a), marble white (#f8fafc), gold accents (#d4af37), democratic blue (#1e40af)
-  Typography: Playfair Display (authority) + Inter (clarity)
+  DESIGN SYSTEM: Capitol Modern (v2, taste-skill audited)
+  Aesthetic: Editorial civic meets premium dashboard.
+  Colors: Deep navy (#0f172a), marble (#f8fafc), gold (#d4af37). One accent, saturation <80%.
+  Typography: Cinzel (display, editorial) + Geist (UI body) + Geist Mono (data). No Inter, no Playfair.
+  Fonts load in index.html only (single source of truth).
 -->
 
-<svelte:head>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-</svelte:head>
-
-<div class="min-h-screen bg-capitol-50 dark:bg-capitol-950 transition-colors duration-500 font-sans">
+<div class="min-h-[100dvh] bg-capitol-50 dark:bg-capitol-950 transition-colors duration-500 font-sans">
   <!-- Skip to content -->
   <a href="#main-content" class="skip-link">Skip to content</a>
 
-  <!-- Navigation Bar -->
-  <nav class="sticky top-0 z-50 bg-white/85 dark:bg-capitol-900/85 backdrop-blur-xl border-b border-capitol-200 dark:border-capitol-800 transition-all duration-300">
+  <!-- Navigation Bar: liquid-glass refraction (1px inner border + inset hairline) -->
+  <nav
+    class="sticky top-0 z-50 bg-white/75 dark:bg-capitol-900/75 backdrop-blur-xl border-b border-capitol-200/80 dark:border-capitol-800/80 transition-all duration-300"
+    style="box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(15,23,42,0.04);"
+  >
     <div class="max-w-7xl mx-auto px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <!-- Logo and Title -->
@@ -143,91 +140,123 @@
   <!-- Main Content -->
   <main id="main-content" class="max-w-7xl mx-auto px-6 lg:px-8 py-8 min-h-[calc(100dvh-4rem)]">
     {#if isLoading}
-      <!-- Loading State -->
-      <div class="flex items-center justify-center h-[60vh]">
-        <div class="text-center space-y-5">
-          <div class="relative w-20 h-20 mx-auto">
-            <div class="absolute inset-0 rounded-full border-2 border-capitol-200 dark:border-capitol-800"></div>
-            <div class="absolute inset-0 rounded-full border-2 border-gold-500 border-t-transparent animate-spin"></div>
-            <div class="absolute inset-3 rounded-full bg-capitol-100 dark:bg-capitol-800 flex items-center justify-center">
-              <svg class="w-7 h-7 text-capitol-600 dark:text-capitol-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
+      <!-- Loading State: asymmetric split, skeletal shimmer instead of centered spinner -->
+      <section class="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-10 md:gap-16 items-center min-h-[calc(100dvh-10rem)] py-10">
+        <div class="space-y-4">
+          <p class="font-mono text-[0.7rem] uppercase tracking-[0.22em] text-capitol-500 dark:text-capitol-400">
+            Session opening
+          </p>
+          <h2 class="font-display text-4xl md:text-5xl font-semibold text-capitol-900 dark:text-white leading-[1.05] tracking-tight">
+            Assembling the<br/>chamber.
+          </h2>
+          <p class="text-sm text-capitol-500 dark:text-capitol-400 max-w-[40ch] leading-relaxed">
+            Gathering representatives from Ollama. First response lands in a moment.
+          </p>
+          <div class="flex items-center gap-2 pt-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="font-mono text-xs text-capitol-600 dark:text-capitol-400 tabular-nums">
+              ollama · localhost:11434
+            </span>
           </div>
-          <div>
-            <h3 class="font-display text-xl font-semibold text-capitol-900 dark:text-white mb-1.5">
-              Assembling Congress
-            </h3>
-            <p class="text-sm text-capitol-500 dark:text-capitol-400">
-              Gathering representatives from Ollama
+        </div>
+        <!-- Skeletal cards matching the real layout so the loading state doesn't feel like a spinner -->
+        <div class="space-y-3" aria-hidden="true">
+          {#each Array(4) as _, i}
+            <div
+              class="h-16 rounded-2xl bg-gradient-to-r from-capitol-100 via-capitol-200/70 to-capitol-100 dark:from-capitol-800 dark:via-capitol-700/70 dark:to-capitol-800 bg-[length:200%_100%] animate-skeleton-shimmer"
+              style="animation-delay: {i * 120}ms"
+            ></div>
+          {/each}
+        </div>
+      </section>
+    {:else if error}
+      <!-- Error State: asymmetric, no centered card. Two columns: status on left, remedy on right. -->
+      <section class="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-10 md:gap-16 items-start min-h-[calc(100dvh-10rem)] py-10">
+        <div class="space-y-5">
+          <div class="flex items-center gap-2.5">
+            <span class="relative flex h-2 w-2">
+              <span class="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-60 animate-ping"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+            </span>
+            <p class="font-mono text-[0.7rem] uppercase tracking-[0.22em] text-red-600 dark:text-red-400">
+              Session adjourned
             </p>
           </div>
-        </div>
-      </div>
-    {:else if error}
-      <!-- Error State -->
-      <div class="flex items-center justify-center h-[60vh]">
-        <div class="max-w-md w-full bg-white dark:bg-capitol-900 rounded-2xl shadow-xl border border-red-200 dark:border-red-900/50 p-8 text-center">
-          <div class="w-20 h-20 mx-auto rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-6">
-            <svg class="w-10 h-10 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-            </svg>
-          </div>
-          <h3 class="font-display text-xl font-semibold text-capitol-900 dark:text-white mb-2">
-            Session Adjourned
-          </h3>
-          <p class="text-capitol-500 dark:text-capitol-400 mb-6">{error}</p>
+          <h2 class="font-display text-4xl md:text-5xl font-semibold text-capitol-900 dark:text-white leading-[1.05] tracking-tight">
+            The chamber<br/>isn't responding.
+          </h2>
+          <p class="font-mono text-sm text-capitol-600 dark:text-capitol-400 bg-capitol-100/60 dark:bg-capitol-800/60 border-l-2 border-red-400 pl-3 py-2 max-w-[50ch]">
+            {error}
+          </p>
           <button
             on:click={() => window.location.reload()}
-            class="px-6 py-3 bg-capitol-600 hover:bg-capitol-700 text-white font-medium rounded-xl transition-colors shadow-lg shadow-capitol-600/25"
+            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-capitol-900 dark:bg-white text-white dark:text-capitol-900 font-medium text-sm transition-all duration-200 hover:-translate-y-[1px] active:scale-[0.98]"
+            style="box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 24px -10px rgba(15,23,42,0.35);"
           >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M4 10a8 8 0 0114-5l2 3M20 14a8 8 0 01-14 5l-2-3"/>
+            </svg>
             Reconvene
           </button>
-          <div class="mt-6 pt-6 border-t border-capitol-200 dark:border-capitol-800 text-left">
-            <p class="text-sm font-medium text-capitol-700 dark:text-capitol-300 mb-3">Troubleshooting:</p>
-            <ul class="text-sm text-capitol-500 dark:text-capitol-400 space-y-2">
-              <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-capitol-400"></span>
-                Ensure Ollama is running
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-capitol-400"></span>
-                Check API server status
-              </li>
-              <li class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-capitol-400"></span>
-                Verify network connection
-              </li>
-            </ul>
-          </div>
         </div>
-      </div>
-    {:else if models.length === 0}
-      <!-- No Models State -->
-      <div class="flex items-center justify-center h-[60vh]">
-        <div class="max-w-md w-full bg-white dark:bg-capitol-900 rounded-2xl shadow-xl border border-amber-200 dark:border-amber-900/50 p-8 text-center">
-          <div class="w-20 h-20 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-6">
-            <svg class="w-10 h-10 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
-          </div>
-          <h3 class="font-display text-xl font-semibold text-capitol-900 dark:text-white mb-2">
-            Empty Chamber
-          </h3>
-          <p class="text-capitol-500 dark:text-capitol-400 mb-6">
-            No representatives found. Install Ollama models to begin.
+        <!-- Remedy column: stacked rows, no card, divide-y logic grouping -->
+        <div class="pt-2">
+          <p class="font-mono text-[0.7rem] uppercase tracking-[0.22em] text-capitol-500 dark:text-capitol-400 mb-4">
+            Remedy
           </p>
-          <div class="bg-capitol-100 dark:bg-capitol-800 rounded-xl p-4 text-left font-mono text-sm">
-            <p class="text-capitol-600 dark:text-capitol-400 mb-2"># Pull representatives:</p>
-            <code class="block text-capitol-800 dark:text-capitol-200 space-y-1">
-              <div>ollama pull phi3:3.8b</div>
-              <div>ollama pull mistral:7b</div>
-              <div>ollama pull llama3.2:3b</div>
-            </code>
-          </div>
+          <ol class="divide-y divide-capitol-200 dark:divide-capitol-800 border-y border-capitol-200 dark:border-capitol-800">
+            <li class="flex items-baseline gap-4 py-4">
+              <span class="font-mono text-xs text-capitol-400 tabular-nums w-8 shrink-0">01</span>
+              <div class="min-w-0">
+                <p class="text-sm text-capitol-900 dark:text-white">Ensure Ollama is running</p>
+                <code class="font-mono text-xs text-capitol-500 dark:text-capitol-400">ollama serve</code>
+              </div>
+            </li>
+            <li class="flex items-baseline gap-4 py-4">
+              <span class="font-mono text-xs text-capitol-400 tabular-nums w-8 shrink-0">02</span>
+              <div class="min-w-0">
+                <p class="text-sm text-capitol-900 dark:text-white">Check the API server</p>
+                <code class="font-mono text-xs text-capitol-500 dark:text-capitol-400">python run_server.py</code>
+              </div>
+            </li>
+            <li class="flex items-baseline gap-4 py-4">
+              <span class="font-mono text-xs text-capitol-400 tabular-nums w-8 shrink-0">03</span>
+              <div class="min-w-0">
+                <p class="text-sm text-capitol-900 dark:text-white">Verify the network</p>
+                <code class="font-mono text-xs text-capitol-500 dark:text-capitol-400">curl :8100/api/models</code>
+              </div>
+            </li>
+          </ol>
         </div>
-      </div>
+      </section>
+    {:else if models.length === 0}
+      <!-- Empty State: asymmetric with terminal-style install guide -->
+      <section class="grid md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-10 md:gap-16 items-start min-h-[calc(100dvh-10rem)] py-10">
+        <div class="space-y-5">
+          <p class="font-mono text-[0.7rem] uppercase tracking-[0.22em] text-amber-600 dark:text-amber-400">
+            Empty chamber
+          </p>
+          <h2 class="font-display text-4xl md:text-5xl font-semibold text-capitol-900 dark:text-white leading-[1.05] tracking-tight">
+            No representatives<br/>have been seated.
+          </h2>
+          <p class="text-sm text-capitol-500 dark:text-capitol-400 max-w-[40ch] leading-relaxed">
+            Pull at least two models and AI Congress will call them to the floor.
+          </p>
+        </div>
+        <div class="rounded-2xl border border-capitol-200 dark:border-capitol-800 bg-capitol-900 dark:bg-capitol-950 overflow-hidden"
+             style="box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 20px 40px -15px rgba(0,0,0,0.2);">
+          <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-capitol-800 bg-capitol-950/60">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500/70"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500/70"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/70"></span>
+            <span class="font-mono text-[0.7rem] text-capitol-400 ml-3">terminal · ollama</span>
+          </div>
+          <pre class="font-mono text-[13px] leading-6 p-5 text-capitol-200"><span class="text-capitol-500"># Pull three representatives to seat the chamber.</span>
+<span class="text-gold-400">$</span> ollama pull phi3:3.8b
+<span class="text-gold-400">$</span> ollama pull mistral:7b
+<span class="text-gold-400">$</span> ollama pull llama3.2:3b</pre>
+        </div>
+      </section>
     {:else}
       <!-- Tab Navigation -->
       <div class="mb-8">
@@ -313,11 +342,17 @@
   }
 
   :global(.font-display) {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Cinzel', 'Iowan Old Style', Georgia, serif;
+    letter-spacing: 0.01em;
   }
 
   :global(.font-sans) {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  :global(.font-mono) {
+    font-family: 'Geist Mono', ui-monospace, 'JetBrains Mono', monospace;
   }
 
   :global(.bg-capitol-50) { background-color: var(--color-capitol-50); }
@@ -365,6 +400,17 @@
 
   :global(.animate-fade-in) {
     animation: fade-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* Skeletal shimmer for loading state - moves a highlight band across pill-shaped rows. */
+  @keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  :global(.animate-skeleton-shimmer) {
+    animation: skeleton-shimmer 1.6s linear infinite;
+    will-change: background-position;
   }
 
   :global(.tabular-nums) {

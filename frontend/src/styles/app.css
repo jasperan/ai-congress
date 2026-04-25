@@ -217,13 +217,14 @@
   }
 
   body {
-    font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, system-ui, -apple-system, sans-serif;
     font-size: 0.9375rem;
-    line-height: 1.65;
-    letter-spacing: 0.01em;
+    line-height: 1.6;
+    letter-spacing: -0.005em;
     background: var(--gradient-parchment);
     color: var(--color-text-primary);
     min-height: 100dvh;
+    font-feature-settings: "ss01", "cv11";
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
@@ -247,8 +248,9 @@
   }
 
   .font-heading {
-    font-family: 'Playfair Display', Georgia, serif;
-    letter-spacing: -0.01em;
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 0;
+    font-weight: 600;
   }
 
   .font-body {
@@ -336,7 +338,7 @@
     padding: var(--spacing-3) var(--spacing-6);
     background: var(--gradient-marble);
     color: white;
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-weight: 600;
     font-size: 0.9375rem;
     border: none;
@@ -393,7 +395,7 @@
     padding: var(--spacing-3) var(--spacing-6);
     background: transparent;
     color: var(--color-primary-500);
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-weight: 600;
     font-size: 0.9375rem;
     border: 2px solid var(--color-primary-500);
@@ -433,7 +435,7 @@
     padding: var(--spacing-2) var(--spacing-4);
     background: transparent;
     color: var(--color-text-secondary);
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-weight: 500;
     font-size: 0.875rem;
     border: none;
@@ -456,7 +458,7 @@
     padding: var(--spacing-3) var(--spacing-6);
     background: var(--gradient-gold);
     color: #1a1a1a;
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-weight: 700;
     font-size: 0.9375rem;
     border: none;
@@ -536,7 +538,7 @@
     border: 2px solid var(--color-border);
     border-radius: var(--radius-lg);
     color: var(--color-text-primary);
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-size: 0.9375rem;
     transition: all 0.2s ease;
   }
@@ -621,7 +623,7 @@
     border: 2px solid var(--color-border);
     border-radius: var(--radius-lg);
     color: var(--color-text-secondary);
-    font-family: 'Source Sans 3', sans-serif;
+    font-family: 'Geist', 'Geist Fallback', ui-sans-serif, sans-serif;
     font-weight: 500;
     font-size: 0.875rem;
     cursor: pointer;
