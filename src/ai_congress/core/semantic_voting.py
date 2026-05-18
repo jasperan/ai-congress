@@ -9,7 +9,7 @@ models phrase answers differently.
 import json
 import re
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -50,8 +50,7 @@ class SemanticVoteResult:
 
     def to_dict(self) -> Dict:
         """Convert to dict including clusters as dicts."""
-        d = asdict(self)
-        return d
+        return asdict(self)
 
 
 JUDGE_PROMPT_TEMPLATE = """You are a neutral judge analyzing AI model responses to a query.
@@ -108,13 +107,15 @@ class SemanticVotingEngine:
 
             # Try to extract JSON from the response (may be wrapped in markdown)
             parsed = self._extract_json(content)
-            if parsed is None or "clusters" not in parsed:
-                logger.warning("Judge returned invalid JSON, using fallback clustering")
+            parsed_clusters = parsed.get("clusters") if parsed else None
+            if not isinstance(parsed_clusters, list) or not parsed_clusters:
+                logger.warning(
+                    "Judge returned invalid or empty clusters, using fallback clustering"
+                )
                 return self._fallback_clusters(responses), ""
 
-            clusters = []
-            for c in parsed["clusters"]:
-                cluster = Cluster(
+            clusters = [
+                Cluster(
                     id=c["id"],
                     label=c.get("label", ""),
                     models=c.get("models", []),
@@ -123,7 +124,8 @@ class SemanticVotingEngine:
                         m: response_map.get(m, "") for m in c.get("models", [])
                     },
                 )
-                clusters.append(cluster)
+                for c in parsed_clusters
+            ]
 
             analysis = parsed.get("analysis", "")
             return clusters, analysis
@@ -132,30 +134,34 @@ class SemanticVotingEngine:
             logger.error(f"Judge grouping failed: {e}")
             return self._fallback_clusters(responses), ""
 
+    @staticmethod
+    def _parse_json_object(text: str) -> Optional[Dict]:
+        """Parse text into a JSON object, returning None for invalid/non-object JSON."""
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
     def _extract_json(self, text: str) -> Optional[Dict]:
         """Extract JSON from text that may contain markdown fencing."""
-        # Try direct parse first
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+        candidates = [text]
 
         # Try extracting from markdown code blocks
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
         if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
+            candidates.append(match.group(1))
 
         # Try finding first { to last }
         start = text.find("{")
         end = text.rfind("}")
         if start != -1 and end != -1 and end > start:
-            try:
-                return json.loads(text[start : end + 1])
-            except json.JSONDecodeError:
-                pass
+            candidates.append(text[start : end + 1])
+
+        for candidate in candidates:
+            parsed = self._parse_json_object(candidate)
+            if parsed is not None:
+                return parsed
 
         return None
 
@@ -216,7 +222,9 @@ class SemanticVotingEngine:
             )
 
         # Multiple responses: judge grouping
-        clusters, analysis = await self.judge_group(responses)
+        clusters, _analysis = await self.judge_group(responses)
+        if not clusters:
+            clusters = self._fallback_clusters(responses)
 
         # Build weights dict
         weights = {r.model_name: r.weight for r in responses}

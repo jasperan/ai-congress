@@ -19,10 +19,6 @@ class MultiSourceFusion:
         "memory": 0.6,
     }
 
-    def __init__(self) -> None:
-        """Initialize the multi-source fusion engine."""
-        pass
-
     async def fuse_sources(
         self,
         query: str,
@@ -41,58 +37,33 @@ class MultiSourceFusion:
         Returns:
             Dict with fused_context string, sources list, and total_sources count.
         """
-        all_items: list[dict] = []
+        all_items = [
+            *self._source_items("rag", rag_chunks, ("content", "text")),
+            *self._source_items("web", web_results, ("content", "snippet")),
+            *self._source_items("memory", memory_results, ("content", "text")),
+        ]
 
-        for chunk in (rag_chunks or []):
-            all_items.append({
-                "source_type": "rag",
-                "content": chunk.get("content", chunk.get("text", "")),
-                "reliability": self.RELIABILITY_SCORES["rag"],
-                "metadata": chunk,
-            })
-
-        for result in (web_results or []):
-            all_items.append({
-                "source_type": "web",
-                "content": result.get("content", result.get("snippet", "")),
-                "reliability": self.RELIABILITY_SCORES["web"],
-                "metadata": result,
-            })
-
-        for mem in (memory_results or []):
-            all_items.append({
-                "source_type": "memory",
-                "content": mem.get("content", mem.get("text", "")),
-                "reliability": self.RELIABILITY_SCORES["memory"],
-                "metadata": mem,
-            })
-
-        # Deduplicate
         deduped = self.deduplicate(all_items)
-
-        # Sort by reliability (highest first)
         deduped.sort(key=lambda x: x["reliability"], reverse=True)
 
-        # Build fused context
-        context_parts: list[str] = []
-        sources: list[dict] = []
-        for item in deduped:
-            content = item["content"]
-            if content:
-                context_parts.append(content)
-                sources.append({
-                    "source_type": item["source_type"],
-                    "content": content,
-                    "reliability": item["reliability"],
-                })
+        sources = [
+            {
+                "source_type": item["source_type"],
+                "content": item["content"],
+                "reliability": item["reliability"],
+            }
+            for item in deduped
+            if item["content"]
+        ]
 
-        fused_context = "\n\n".join(context_parts)
+        fused_context = "\n\n".join(source["content"] for source in sources)
 
         logger.info(
-            "Fused %d sources (from %d total, %d after dedup) for query",
+            "Fused %d sources (from %d total, %d after dedup) for query: %s",
             len(sources),
             len(all_items),
             len(deduped),
+            query[:80],
         )
 
         return {
@@ -100,6 +71,33 @@ class MultiSourceFusion:
             "sources": sources,
             "total_sources": len(sources),
         }
+
+    @classmethod
+    def _source_items(
+        cls,
+        source_type: str,
+        records: Optional[list[dict]],
+        content_keys: tuple[str, ...],
+    ) -> list[dict]:
+        """Normalize raw source records into scored fusion items."""
+        return [
+            {
+                "source_type": source_type,
+                "content": cls._first_value(record, content_keys),
+                "reliability": cls.RELIABILITY_SCORES[source_type],
+                "metadata": record,
+            }
+            for record in (records or [])
+        ]
+
+    @staticmethod
+    def _first_value(record: dict, keys: tuple[str, ...]) -> str:
+        """Return the first non-empty content value from a source record."""
+        for key in keys:
+            value = record.get(key)
+            if value:
+                return value
+        return ""
 
     def deduplicate(self, items: list[dict]) -> list[dict]:
         """Remove near-duplicate items based on word overlap.
@@ -116,26 +114,27 @@ class MultiSourceFusion:
         if not items:
             return []
 
-        # Sort by reliability descending so we keep higher-reliability items
         sorted_items = sorted(items, key=lambda x: x["reliability"], reverse=True)
         kept: list[dict] = []
 
         for item in sorted_items:
             content = item.get("content", "")
-            is_duplicate = False
-            words_new = set(content.lower().split())
-
-            for existing in kept:
-                words_existing = set(existing.get("content", "").lower().split())
-                union = words_new | words_existing
-                if not union:
-                    continue
-                overlap = len(words_new & words_existing) / len(union)
-                if overlap > 0.8:
-                    is_duplicate = True
-                    break
+            is_duplicate = any(
+                self._word_overlap(content, existing.get("content", "")) > 0.8
+                for existing in kept
+            )
 
             if not is_duplicate:
                 kept.append(item)
 
         return kept
+
+    @staticmethod
+    def _word_overlap(first: str, second: str) -> float:
+        """Return Jaccard word overlap for two content strings."""
+        first_words = set(first.lower().split())
+        second_words = set(second.lower().split())
+        union = first_words | second_words
+        if not union:
+            return 0.0
+        return len(first_words & second_words) / len(union)

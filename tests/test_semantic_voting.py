@@ -158,6 +158,32 @@ class TestSemanticVotingEngine:
         assert clusters[0].models == ["mistral:7b"]
         assert clusters[1].models == ["phi3:3.8b"]
 
+    def test_extract_json_from_markdown_block(self):
+        """Judge JSON may be wrapped in markdown by local models."""
+        content = '```json\n{"clusters": [], "analysis": "none"}\n```'
+        parsed = self.engine._extract_json(content)
+
+        assert parsed == {"clusters": [], "analysis": "none"}
+
+    @pytest.mark.asyncio
+    async def test_vote_falls_back_when_judge_returns_empty_clusters(self):
+        """Empty judge clusters are explicit fallback, not an IndexError."""
+        responses = self._make_responses([
+            ("mistral:7b", "Paris", 0.8),
+            ("phi3:3.8b", "London", 0.1),
+        ])
+
+        self.mock_client.chat.return_value = {
+            "message": {"content": '{"clusters": [], "analysis": "none"}'}
+        }
+
+        result = await self.engine.vote(responses)
+
+        assert result is not None
+        assert result.winning_model == "mistral:7b"
+        assert result.winner == "Paris"
+        assert len(result.clusters) == 2
+
     @pytest.mark.asyncio
     async def test_vote_reaches_consensus(self):
         """2/3 models agree, consensus >= 0.6."""
