@@ -13,26 +13,34 @@ Plus the original 8 Symphony/Pi-inspired improvements (ACP, supervision, anchori
 """
 
 import asyncio
-import hashlib
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from .acp.anchoring import anchor_responses, format_anchored_debate_prompt
 from .acp.handoff import AgentHandoff
 from .acp.message import AgentIdentity, PersonalityProfile
 from .acp.message_bus import ACPMessageBus
 from .acp.registry import AgentRegistry
-from .acp.roles import AgentRole, RoleDispatcher
-from .acp.run_context import AgentState, ImplementationRun, RunStatus
-from .acp.supervisor import AgentSupervisor, RestartPolicy, SupervisedTask
+from .acp.roles import RoleDispatcher
+from .acp.run_context import ImplementationRun, RunStatus
+from .acp.supervisor import AgentSupervisor
+from .debate_artifact import DebateArtifact
+from .enhanced_pipeline import (
+    assign_swarm_roles,
+    determine_degradation_mode,
+    filter_available_models,
+    load_personality_state,
+    revise_sub_queries_after_wave,
+    run_debate_wave,
+    run_initial_response_wave,
+    run_query_decomposition,
+)
 from .model_registry import ModelRegistry
 from .personality.emotional_voting import EmotionalVotingEngine
 from .personality.profile import ModelPersonalityLoader
 from .voting_engine import VotingEngine
 
 # New module imports - intelligence
-from .intelligence.role_prompts import get_role_prompt
 from .intelligence.reasoning_router import ReasoningRouter
 from .intelligence.query_classifier import QueryClassifier
 from .intelligence.moe_router import MixtureOfExpertsRouter
@@ -70,54 +78,15 @@ from .observability.performance_profiler import PerformanceProfiler
 
 # Paperclip-inspired modules
 from .acp.audit_trail import AuditTrail, AuditEvent, AuditEventType
-from .acp.goal_alignment import Mission, GoalAlignmentEngine
+from .acp.goal_alignment import GoalAlignmentEngine
 from .acp.org_chart import OrgChart
-from .acp.heartbeat import HeartbeatManager, HeartbeatConfig
+from .acp.heartbeat import HeartbeatManager
 
 # Precedent-based reasoning (stare decisis)
 from .precedent.precedent_store import PrecedentStore
 from .precedent.precedent_injector import PrecedentInjector, PrecedentAction
 
 logger = logging.getLogger(__name__)
-
-# Map RoleDispatcher role values to AgentRole for goal alignment
-_ROLE_MAP = {
-    "planner": AgentRole.PLANNER,
-    "critic": AgentRole.CRITIC,
-    "worker": AgentRole.WORKER,
-    "synthesizer": AgentRole.SYNTHESIZER,
-}
-
-
-class DebateArtifact:
-    """Persistent, inspectable debate state for observability."""
-
-    def __init__(self):
-        self.rounds: list[dict] = []
-        self.position_history: dict[str, list] = {}
-
-    def save_round(self, round_num: int, responses: dict, clusters: list = None):
-        self.rounds.append({
-            "round": round_num,
-            "timestamp": time.time(),
-            "responses": dict(responses),
-            "cluster_count": len(clusters) if clusters else 0,
-        })
-
-    def record_position(self, model_name: str, cluster_id: int):
-        if model_name not in self.position_history:
-            self.position_history[model_name] = []
-        self.position_history[model_name].append(cluster_id)
-
-    def get_position_evolution(self, model_name: str) -> list:
-        return self.position_history.get(model_name, [])
-
-    def to_dict(self) -> dict:
-        return {
-            "total_rounds": len(self.rounds),
-            "rounds": self.rounds,
-            "position_history": dict(self.position_history),
-        }
 
 
 class EnhancedOrchestrator:
@@ -402,15 +371,7 @@ class EnhancedOrchestrator:
         cited_precedents = []
 
         # === (c) Graceful degradation check ===
-        try:
-            degradation_mode_info = self.graceful_degradation.determine_mode(
-                available_models=len(models),
-                total_models=len(models),
-            )
-            run.log_event("DEGRADATION_CHECK", detail=str(degradation_mode_info))
-        except Exception as e:
-            logger.warning("Graceful degradation check failed: %s", e)
-            degradation_mode_info = {"mode": "full"}
+        degradation_mode_info = determine_degradation_mode(self, models, run)
 
         # If error mode (no models), bail early
         if degradation_mode_info.get("mode") == "error":
@@ -424,18 +385,7 @@ class EnhancedOrchestrator:
             )
 
         # === (d) Circuit breaker filtering ===
-        available_models = []
-        try:
-            for model in models:
-                if self.circuit_breaker.can_execute(model):
-                    available_models.append(model)
-                else:
-                    run.log_event("CIRCUIT_BREAKER_SKIP", model, "Model circuit breaker OPEN")
-                    logger.info("Skipping model %s: circuit breaker OPEN", model)
-            circuit_breaker_states = self.circuit_breaker.get_all_states()
-        except Exception as e:
-            logger.warning("Circuit breaker check failed: %s", e)
-            available_models = list(models)
+        available_models, circuit_breaker_states = filter_available_models(self, models, run)
 
         if not available_models:
             run.fail("All models have open circuit breakers")
@@ -459,37 +409,14 @@ class EnhancedOrchestrator:
                 logger.warning("Re-degradation check failed: %s", e)
 
         # === (e) Register agents and assign roles ===
-        self._register_agents(available_models)
-        profiles = {m: self.personality_loader.get_profile(m) for m in available_models}
-        weights = {m: self.dynamic_weight_manager.get_weight(m) for m in available_models}
-
-        role_assignments = self.role_dispatcher.assign_roles(available_models, profiles, weights)
-        role_summary = self.role_dispatcher.get_role_summary(role_assignments)
-        run.log_event("ROLES_ASSIGNED", detail=str(role_summary))
-
-        # Apply org chart rank bonus to weights
-        for model in available_models:
-            bonus = self.org_chart.get_rank_bonus(model)
-            if bonus != 1.0:
-                weights[model] = weights.get(model, 0.5) * bonus
-
-        for model in available_models:
-            assigned_role = "worker"
-            for role, assignments in role_assignments.items():
-                if any(a.model_name == model for a in assignments):
-                    assigned_role = role.value
-                    break
-            run.register_agent(model, role=assigned_role)
+        role_setup = assign_swarm_roles(self, available_models, run)
+        profiles = role_setup.profiles
+        weights = role_setup.weights
+        role_assignments = role_setup.role_assignments
+        role_summary = role_setup.role_summary
 
         # === (f) Load persisted personality state ===
-        try:
-            for model in available_models:
-                profile = profiles.get(model)
-                if profile:
-                    self.personality_persistence.apply_persisted_state(model, profile)
-            run.log_event("PERSONALITY_LOADED", detail="Persisted state applied")
-        except Exception as e:
-            logger.warning("Personality persistence load failed: %s", e)
+        load_personality_state(self, available_models, profiles, run)
 
         profiler.end_stage("initialization")
 
@@ -553,48 +480,14 @@ class EnhancedOrchestrator:
 
         # === (i) Query decomposition (planners, if enabled) ===
         profiler.start_stage("query_decomposition")
-        planners = self.role_dispatcher.get_models_for_role(role_assignments, AgentRole.PLANNER)
-
-        if enable_decomposition and planners:
-            planner_model = planners[0]
-            run.log_event("DECOMPOSITION_START", planner_model)
-
-            planner_system = get_role_prompt("planner")
-            decompose_prompt = (
-                f"Break this question into 1-3 focused sub-questions that would help answer it comprehensively. "
-                f"If the question is simple enough to answer directly, just repeat it as-is.\n\n"
-                f"Question: {prompt}\n\n"
-                f"Output each sub-question on its own line, prefixed with '- '."
-            )
-            decomp_result = await self._query_model(
-                planner_model,
-                decompose_prompt,
-                temperature=0.3,
-                system_prompt=planner_system,
-                timeout=self.adaptive_timeout.get_timeout(planner_model),
-            )
-            if decomp_result["success"]:
-                lines = [
-                    line.strip().lstrip("- ").strip()
-                    for line in decomp_result["response"].split("\n")
-                    if line.strip().startswith("- ") or line.strip().startswith("-")
-                ]
-                if lines:
-                    run.sub_queries = [{"text": sq, "source": planner_model} for sq in lines]
-                    run.log_event("DECOMPOSED", planner_model, f"sub_queries={len(lines)}")
-
-                # Record latency
-                try:
-                    self.adaptive_timeout.record_latency(planner_model, decomp_result.get("latency_ms", 0))
-                except Exception:
-                    pass
-
-        # === (j) Wire sub-queries into effective prompt ===
-        if run.sub_queries:
-            sub_q_text = "\n".join(f"- {sq['text']}" for sq in run.sub_queries)
-            effective_prompt = (
-                f"{effective_prompt}\n\nTo answer comprehensively, address these sub-questions:\n{sub_q_text}"
-            )
+        planners, effective_prompt = await run_query_decomposition(
+            self,
+            prompt,
+            effective_prompt,
+            run,
+            role_assignments,
+            enable_decomposition,
+        )
         profiler.end_stage("query_decomposition")
 
         # Start GPU-aware concurrency control
@@ -602,108 +495,30 @@ class EnhancedOrchestrator:
 
         # === (k) Supervised parallel queries (Wave 1) with role-differentiated prompts ===
         profiler.start_stage("wave_1_queries")
-        run.log_event("WAVE_1_START", detail="Initial parallel queries with role prompts")
-        run.advance_turn()
-
-        supervised_tasks = []
-        for model in available_models:
-            # Determine role for this model
-            model_role = "worker"
-            for role, assignments in role_assignments.items():
-                if any(a.model_name == model for a in assignments):
-                    model_role = role.value
-                    break
-
-            # Get role-specific system prompt
-            role_system_prompt = get_role_prompt(model_role)
-
-            # Inject mission alignment context if goal engine is active
-            if self.goal_engine:
-                agent_role = _ROLE_MAP.get(model_role, AgentRole.WORKER)
-                objective = self.goal_engine.create_agent_objective(model, agent_role)
-                alignment_prompt = self.goal_engine.build_alignment_prompt(objective)
-                role_system_prompt = f"{role_system_prompt}\n\n{alignment_prompt}"
-
-            # Inject precedent context if applicable
-            if precedent_action == PrecedentAction.SOFT_CITE and cited_precedents:
-                role_system_prompt = self.precedent_injector.augment_system_prompt(
-                    role_system_prompt, cited_precedents, precedent_action,
-                )
-
-            # Get adaptive timeout for this model
-            model_timeout = self.adaptive_timeout.get_timeout(model)
-
-            supervised_tasks.append(
-                SupervisedTask(
-                    agent_id=model,
-                    coro_factory=self._throttled_query,
-                    args=(model, effective_prompt, temperature),
-                    kwargs={"system_prompt": role_system_prompt, "timeout": model_timeout},
-                    restart_policy=RestartPolicy.RESTART,
-                    max_retries=2,
-                    stall_timeout=model_timeout + 10.0,
-                )
-            )
-
-        completed_tasks = await self.supervisor.supervise_all(supervised_tasks)
-
-        initial_responses = []
-        for task in completed_tasks:
-            if task.success and task.result:
-                initial_responses.append(task.result)
-                run.record_response(task.agent_id, task.result.get("response", ""))
-
-                # === (l) Record latencies in AdaptiveTimeout ===
-                try:
-                    latency_ms = task.result.get("latency_ms", 0)
-                    if latency_ms > 0:
-                        self.adaptive_timeout.record_latency(task.agent_id, latency_ms)
-                except Exception:
-                    pass
-
-                # === (m) Record success in CircuitBreaker ===
-                try:
-                    self.circuit_breaker.record_success(task.agent_id)
-                except Exception:
-                    pass
-            else:
-                # Record failure in circuit breaker
-                try:
-                    self.circuit_breaker.record_failure(task.agent_id)
-                except Exception:
-                    pass
+        initial_responses = await run_initial_response_wave(
+            self,
+            run,
+            available_models,
+            role_assignments,
+            effective_prompt,
+            temperature,
+            precedent_action,
+            cited_precedents,
+        )
 
         profiler.end_stage("wave_1_queries")
 
         # === Sub-query revision check after Wave 1 ===
-        if run.sub_queries and self.task_reviser.revisions_remaining(run) > 0:
-            try:
-                signal = await self.task_reviser.assess(run, initial_responses)
-                if signal.should_revise:
-                    planner_model = planners[0] if planners else available_models[0]
-                    run.log_event(
-                        "SUB_QUERY_REVISION_TRIGGERED",
-                        planner_model,
-                        signal.reason,
-                    )
-                    revised_sq = await self.task_reviser.revise(run, signal, planner_model)
-                    run.sub_queries = revised_sq
-                    sub_q_text = "\n".join(f"- {sq['text']}" for sq in revised_sq)
-                    effective_prompt = (
-                        f"{prompt}\n\nAddress these refined sub-questions:\n{sub_q_text}"
-                    )
-                    run.log_event(
-                        "SUB_QUERY_REVISED",
-                        planner_model,
-                        f"revised={len(revised_sq)} sub-queries",
-                    )
-                else:
-                    run.log_event(
-                        "SUB_QUERY_REVISION_SKIPPED",
-                        detail=f"scores: div={signal.divergence_score:.2f} cov={signal.coverage_score:.2f} conf={signal.avg_confidence:.2f}",
-                    )
-            except Exception as e:
-                logger.warning("Sub-query revision failed: %s", e)
+        revised_prompt = await revise_sub_queries_after_wave(
+            self,
+            run,
+            prompt,
+            initial_responses,
+            planners,
+            available_models,
+        )
+        if revised_prompt is not None:
+            effective_prompt = revised_prompt
 
         if not initial_responses:
             run.fail("No successful initial responses")
@@ -719,164 +534,20 @@ class EnhancedOrchestrator:
 
         # === (n) Hash-anchored critique wave (Wave 2) with dynamic depth ===
         profiler.start_stage("wave_2_debate")
-        run.log_event("WAVE_2_START", detail="Anchored critique wave with dynamic depth")
-        run.advance_turn()
-        run.status = RunStatus.DEBATING
-
-        response_texts = [r["response"] for r in initial_responses]
-        response_models = [r["model"] for r in initial_responses]
-        anchored = anchor_responses(response_models, response_texts)
-
-        # Store anchors in run context
-        for ar in anchored:
-            run.anchored_responses[ar.anchor] = ar.text
-
-        # Determine debate depth based on initial consensus
-        debate_rounds = 1  # default
-        try:
-            # Estimate initial consensus from response similarity
-            if len(response_texts) >= 2:
-                similarities = []
-                for i in range(len(response_texts)):
-                    for j in range(i + 1, len(response_texts)):
-                        sim = self.coalition_formation.compute_similarity(
-                            response_texts[i], response_texts[j]
-                        )
-                        similarities.append(sim)
-                initial_consensus = sum(similarities) / len(similarities) if similarities else 0.5
-            else:
-                initial_consensus = 1.0
-
-            depth_result = self.dynamic_debate_depth.determine_depth(
-                consensus=initial_consensus,
-                num_models=len(available_models),
-            )
-            debate_rounds = depth_result.get("rounds", 1)
-            run.log_event("DEBATE_DEPTH", detail=f"rounds={debate_rounds}, reason={depth_result.get('reason', '')}")
-        except Exception as e:
-            logger.warning("Dynamic depth determination failed: %s", e)
-            debate_rounds = 1
-
-        # Get temperature schedule for debate rounds
-        try:
-            temp_schedule = self.dynamic_debate_depth.get_temperature_schedule(debate_rounds)
-        except Exception:
-            temp_schedule = [max(0.3, temperature - 0.2)] * max(debate_rounds, 1)
-
-        revised_responses = list(initial_responses)  # start with initial
-
-        for round_idx in range(debate_rounds):
-            round_temp = temp_schedule[round_idx] if round_idx < len(temp_schedule) else 0.4
-
-            # Build critique prompt with anchored responses
-            critique_prompt = format_anchored_debate_prompt(
-                prompt,
-                anchored,
-                "Review these responses. Reference specific responses by model#hash. "
-                "If you see merit in another position, revise your answer. "
-                "If you still believe your answer is correct, strengthen your argument.",
-            )
-
-            # Devil's advocate on moderate consensus rounds
-            devils_advocate_result = None
-            if 0.3 < initial_consensus < 0.7 and round_idx == 0:
-                try:
-                    # Pick a critic model
-                    critics = self.role_dispatcher.get_models_for_role(role_assignments, AgentRole.CRITIC)
-                    da_model = critics[0] if critics else response_models[0]
-                    majority_answer = revised_responses[0]["response"] if revised_responses else ""
-                    devils_advocate_result = await self.devils_advocate.run_devils_advocate(
-                        question=prompt,
-                        majority_answer=majority_answer,
-                        critic_model=da_model,
-                        ollama_client=self.ollama_client,
-                    )
-                    if devils_advocate_result.get("is_compelling"):
-                        critique_prompt += (
-                            f"\n\nA devil's advocate challenge has been raised:\n"
-                            f"{devils_advocate_result.get('challenge', '')}\n\n"
-                            f"Address this challenge in your response."
-                        )
-                        run.log_event("DEVILS_ADVOCATE", da_model, f"strength={devils_advocate_result.get('strength', 0):.2f}")
-                except Exception as e:
-                    logger.warning("Devil's advocate failed: %s", e)
-
-            # Critique tasks - use critic system prompt
-            critic_system_prompt = get_role_prompt("critic")
-            critique_tasks = [
-                SupervisedTask(
-                    agent_id=f"{model}_critique_r{round_idx}",
-                    coro_factory=self._throttled_query,
-                    args=(model, critique_prompt, round_temp),
-                    kwargs={
-                        "system_prompt": critic_system_prompt,
-                        "timeout": self.adaptive_timeout.get_timeout(model),
-                    },
-                    restart_policy=RestartPolicy.SKIP,
-                    max_retries=1,
-                    stall_timeout=self.adaptive_timeout.get_timeout(model) + 10.0,
-                )
-                for model in response_models
-            ]
-
-            critique_completed = await self.supervisor.supervise_all(critique_tasks)
-
-            new_revised = []
-            for task, original in zip(critique_completed, revised_responses):
-                if task.success and task.result:
-                    new_revised.append(task.result)
-                    run.record_response(task.agent_id, task.result.get("response", ""))
-                    # Record latency and circuit breaker
-                    try:
-                        model_name = task.result.get("model", task.agent_id.split("_critique")[0])
-                        latency = task.result.get("latency_ms", 0)
-                        if latency > 0:
-                            self.adaptive_timeout.record_latency(model_name, latency)
-                        self.circuit_breaker.record_success(model_name)
-                    except Exception:
-                        pass
-                else:
-                    new_revised.append(original)
-                    try:
-                        model_name = task.agent_id.split("_critique")[0]
-                        self.circuit_breaker.record_failure(model_name)
-                    except Exception:
-                        pass
-
-            revised_responses = new_revised
-
-            # Optional sub-query revision between debate rounds
-            if (
-                run.sub_queries
-                and self.task_reviser
-                and self.task_reviser.revisions_remaining(run) > 0
-                and round_idx < debate_rounds - 1  # not after last round
-            ):
-                try:
-                    signal = await self.task_reviser.assess(run, revised_responses)
-                    if signal.should_revise:
-                        planner_model = planners[0] if planners else available_models[0]
-                        revised_sq = await self.task_reviser.revise(run, signal, planner_model)
-                        run.sub_queries = revised_sq
-                        # Update effective_prompt so subsequent rounds can use revised sub-queries
-                        sub_q_text = "\n".join(f"- {sq['text']}" for sq in revised_sq)
-                        effective_prompt = (
-                            f"{prompt}\n\nAddress these refined sub-questions:\n{sub_q_text}"
-                        )
-                        run.log_event(
-                            "SUB_QUERY_REVISED",
-                            planner_model,
-                            f"mid-debate revision at round {round_idx + 1}",
-                        )
-                except Exception as e:
-                    logger.warning("Mid-debate revision failed: %s", e)
-
-            # Update anchored responses for next round
-            anchored = anchor_responses(
-                [r["model"] for r in revised_responses],
-                [r["response"] for r in revised_responses],
-            )
-
+        debate_outcome = await run_debate_wave(
+            self,
+            run,
+            prompt,
+            available_models,
+            role_assignments,
+            initial_responses,
+            planners,
+            temperature,
+        )
+        revised_responses = debate_outcome.revised_responses
+        response_models = debate_outcome.response_models
+        debate_rounds = debate_outcome.debate_rounds
+        artifact = debate_outcome.artifact
         profiler.end_stage("wave_2_debate")
 
         # Stop GPU monitoring (safe to call multiple times)
@@ -894,18 +565,6 @@ class EnhancedOrchestrator:
                     similarity = 1.0 if initial[:200] == revised[:200] else 0.5
                 if model in run.agent_states:
                     run.agent_states[model].conviction_score = similarity
-
-        # Debate artifact for state persistence
-        artifact = DebateArtifact()
-        artifact.save_round(
-            round_num=0,
-            responses={r["model"]: r["response"][:200] for r in initial_responses},
-        )
-        for round_idx in range(debate_rounds):
-            artifact.save_round(
-                round_num=round_idx + 1,
-                responses={r["model"]: r["response"][:200] for r in revised_responses},
-            )
 
         # === (p) Coalition formation before voting ===
         try:
