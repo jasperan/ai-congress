@@ -49,7 +49,6 @@ from .intelligence.moe_router import MixtureOfExpertsRouter
 from .voting.ensemble_voter import EnsembleVoter
 from .voting.confidence_calibrator import ConfidenceCalibrator
 from .voting.minority_report import MinorityReportGenerator
-from .voting.contextual_selector import ContextualVotingSelector
 
 # New module imports - debate
 from .debate.dynamic_depth import DynamicDebateDepth
@@ -143,7 +142,6 @@ class EnhancedOrchestrator:
         self.ensemble_voter = EnsembleVoter(self.voting_engine)
         self.confidence_calibrator = ConfidenceCalibrator()
         self.minority_report_gen = MinorityReportGenerator()
-        self.contextual_voting_selector = ContextualVotingSelector()
 
         # Debate
         self.dynamic_debate_depth = DynamicDebateDepth()
@@ -157,23 +155,10 @@ class EnhancedOrchestrator:
         self.coalition_formation = CoalitionFormation()
 
         # Learning
-        base_weights = {}
-        try:
-            # ModelRegistry may not have list_models(); pull from benchmarks dict
-            if hasattr(self.model_registry, "list_models"):
-                model_names = self.model_registry.list_models() or []
-            elif hasattr(self.model_registry, "benchmarks"):
-                model_names = list(self.model_registry.benchmarks.keys())
-            elif hasattr(self.model_registry, "weights"):
-                model_names = list(self.model_registry.weights.keys())
-            elif hasattr(self.model_registry, "_weights"):
-                model_names = list(self.model_registry._weights.keys())
-            else:
-                model_names = []
-            for model_name in model_names:
-                base_weights[model_name] = self.model_registry.get_model_weight(model_name)
-        except Exception:
-            pass
+        base_weights = {
+            model_name: self.model_registry.get_model_weight(model_name)
+            for model_name in getattr(self.model_registry, "weights", {})
+        }
         self.dynamic_weight_manager = DynamicWeightManager(base_weights=base_weights)
         self.feedback_collector = FeedbackCollector()
         self.personality_persistence = PersonalityPersistence()
@@ -583,20 +568,7 @@ class EnhancedOrchestrator:
             logger.warning("Coalition formation failed: %s", e)
             coalition_info = []
 
-        # === (q) Contextual voting algorithm selection ===
-        selected_algorithm = "weighted_majority"
-        try:
-            response_lengths = [len(r["response"]) for r in revised_responses]
-            selected_algorithm = self.contextual_voting_selector.select_algorithm(
-                query=prompt,
-                num_responses=len(revised_responses),
-                response_lengths=response_lengths,
-            )
-            run.log_event("VOTING_ALGORITHM_SELECTED", detail=selected_algorithm)
-        except Exception as e:
-            logger.warning("Contextual voting selector failed: %s", e)
-
-        # === (r) Ensemble voting ===
+        # === (q) Ensemble voting ===
         run.log_event("VOTING_START")
         run.status = RunStatus.VOTING
 

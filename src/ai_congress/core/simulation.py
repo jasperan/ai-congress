@@ -72,32 +72,17 @@ OPPOSE_SIGNALS = {
 # ── Historical Stances ───────────────────────────────────────────────────────
 # Known positions for accuracy scoring (topic_keyword -> {senator: expected_vote})
 
+# Party-line baseline used as the expected vote for every tracked topic. Add a
+# per-topic override below if a topic's known stances should diverge from this.
+DEFAULT_STANCES = {
+    "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
+    "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
+    "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
+}
+
 HISTORICAL_STANCES = {
-    "ai": {
-        "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
-        "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
-        "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
-    },
-    "gun": {
-        "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
-        "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
-        "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
-    },
-    "healthcare": {
-        "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
-        "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
-        "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
-    },
-    "immigration": {
-        "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
-        "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
-        "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
-    },
-    "climate": {
-        "Chuck Schumer": "yea", "Dick Durbin": "yea", "Patty Murray": "yea",
-        "Ron Wyden": "yea", "Chuck Grassley": "nay", "JD Vance": "nay",
-        "Mitch McConnell": "nay", "John Thune": "nay", "John Cornyn": "nay",
-    },
+    topic: DEFAULT_STANCES
+    for topic in ("ai", "gun", "healthcare", "immigration", "climate")
 }
 
 # ── Data Classes ─────────────────────────────────────────────────────────────
