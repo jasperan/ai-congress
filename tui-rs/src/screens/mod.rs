@@ -5,8 +5,6 @@ pub mod results;
 pub mod simulation;
 pub mod splash;
 
-use ratatui::layout::Rect;
-use ratatui::Frame;
 
 /// Action returned by a screen's update method to tell the router what to do.
 #[derive(Debug)]

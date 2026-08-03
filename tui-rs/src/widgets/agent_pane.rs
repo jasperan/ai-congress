@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 use textwrap;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use super::AgentPaneData;

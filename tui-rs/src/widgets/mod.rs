@@ -7,7 +7,6 @@ pub mod progress_bar;
 pub mod sparkline_widget;
 pub mod vote_tracker;
 
-use ratatui::style::Color;
 
 /// Data needed to render a single agent pane.
 #[derive(Debug, Clone)]

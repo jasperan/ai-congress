@@ -9,8 +9,8 @@ name = "congress-tui"
 path = "src/main.rs"
 
 [dependencies]
-ratatui = "0.29"
-crossterm = "0.28"
+ratatui = "0.30.2"
+crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 futures-util = "0.3"
@@ -23,5 +23,5 @@ clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 textwrap = "0.16"
 similar = "2"
-tui-input = "0.10"
-rattles = "0.2"
+tui-input = "0.15"
+rattles = "0.3"
