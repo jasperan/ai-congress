@@ -1,5 +1,5 @@
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
@@ -47,7 +47,7 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
                 FeedEntryType::Lobby => ("$$", theme::PURPLE),
                 FeedEntryType::Filibuster => ("!!", theme::RED),
                 FeedEntryType::Amendment => ("&&", theme::CYAN),
-                FeedEntryType::DirectAddress => ("->", Color::Magenta),
+                FeedEntryType::DirectAddress => ("->", theme::SECONDARY),
             };
 
             let name_color = entry

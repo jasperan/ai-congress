@@ -1,20 +1,40 @@
 use ratatui::style::Color;
 
-pub const CYAN: Color = Color::Rgb(0, 215, 255);
-pub const BLUE: Color = Color::Rgb(95, 135, 255);
-pub const GREEN: Color = Color::Rgb(181, 189, 104);
-pub const RED: Color = Color::Rgb(204, 102, 102);
-pub const YELLOW: Color = Color::Rgb(255, 255, 0);
-pub const GRAY: Color = Color::Rgb(128, 128, 128);
-pub const DIM_GRAY: Color = Color::Rgb(102, 102, 102);
-pub const DARK_GRAY: Color = Color::Rgb(80, 80, 80);
-pub const ACCENT: Color = Color::Rgb(138, 190, 183);
-pub const PURPLE: Color = Color::Rgb(149, 117, 205);
+// ── Catppuccin Mocha ────────────────────────────────────────────────────────
 
-// Party colors
-pub const REPUBLICAN: Color = RED;
-pub const DEMOCRAT: Color = Color::Rgb(100, 149, 237); // cornflower blue
-pub const INDEPENDENT: Color = YELLOW;
+pub const BG: Color = Color::Rgb(0x1e, 0x1e, 0x2e);
+pub const SURFACE: Color = Color::Rgb(0x18, 0x18, 0x25);
+pub const ELEVATED: Color = Color::Rgb(0x31, 0x32, 0x44);
+pub const HIGHEST: Color = Color::Rgb(0x45, 0x47, 0x5a);
+pub const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
+pub const SUBTEXT: Color = Color::Rgb(0xa6, 0xad, 0xc8);
+pub const MUTED: Color = Color::Rgb(0x6c, 0x70, 0x86);
+pub const DIM: Color = Color::Rgb(0x58, 0x5b, 0x70);
+pub const PRIMARY: Color = Color::Rgb(0x89, 0xb4, 0xfa);
+pub const SECONDARY: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
+pub const INFO: Color = Color::Rgb(0x89, 0xdc, 0xeb);
+pub const SUCCESS: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
+pub const WARNING: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
+pub const ERROR: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
+
+// ── Legacy aliases (preserve existing call sites) ────────────────────────────
+
+pub const CYAN: Color = INFO;
+pub const BLUE: Color = PRIMARY;
+pub const GREEN: Color = SUCCESS;
+pub const RED: Color = ERROR;
+pub const YELLOW: Color = WARNING;
+pub const GRAY: Color = SUBTEXT;
+pub const DIM_GRAY: Color = MUTED;
+pub const DARK_GRAY: Color = DIM;
+pub const ACCENT: Color = INFO;
+pub const PURPLE: Color = SECONDARY;
+
+// ── Party colors ─────────────────────────────────────────────────────────────
+
+pub const REPUBLICAN: Color = ERROR;
+pub const DEMOCRAT: Color = PRIMARY;
+pub const INDEPENDENT: Color = WARNING;
 
 /// Returns the color for a given party string.
 pub fn party_color(party: &str) -> Color {
@@ -22,16 +42,16 @@ pub fn party_color(party: &str) -> Color {
         "R" | "REPUBLICAN" => REPUBLICAN,
         "D" | "DEMOCRAT" | "DEMOCRATIC" => DEMOCRAT,
         "I" | "INDEPENDENT" => INDEPENDENT,
-        _ => GRAY,
+        _ => SUBTEXT,
     }
 }
 
 /// Returns the color for a given vote string.
 pub fn vote_color(vote: &str) -> Color {
     match vote.to_lowercase().as_str() {
-        "yea" | "yes" => GREEN,
-        "nay" | "no" => RED,
-        "abstain" => YELLOW,
-        _ => GRAY,
+        "yea" | "yes" => SUCCESS,
+        "nay" | "no" => ERROR,
+        "abstain" => WARNING,
+        _ => SUBTEXT,
     }
 }

@@ -252,7 +252,7 @@ impl ModelsScreen {
 
         let list = List::new(items)
             .block(list_block)
-            .highlight_style(Style::default().bg(ratatui::style::Color::Rgb(30, 30, 40)));
+            .highlight_style(Style::default().bg(theme::ELEVATED));
 
         f.render_stateful_widget(list, chunks[1], &mut self.list_state);
 

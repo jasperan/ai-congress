@@ -79,7 +79,7 @@ pub fn draw_help_overlay(
 
     // Dark overlay background
     f.render_widget(Clear, popup);
-    let bg = Block::default().style(Style::default().bg(ratatui::style::Color::Rgb(15, 15, 20)));
+    let bg = Block::default().style(Style::default().bg(theme::BG));
     f.render_widget(bg, popup);
 
     let block = Block::default()

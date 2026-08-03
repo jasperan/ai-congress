@@ -1033,7 +1033,7 @@ impl SimulationScreen {
                 title_spans.push(Span::styled(
                     format!(" FILIBUSTER: {} ", fb.agent_name),
                     Style::default()
-                        .fg(Color::Black)
+                        .fg(theme::BG)
                         .bg(theme::RED)
                         .add_modifier(Modifier::BOLD),
                 ));
@@ -1552,7 +1552,7 @@ impl SimulationScreen {
                     FeedEntryType::Lobby => ("$$", theme::PURPLE),
                     FeedEntryType::Filibuster => ("!!", theme::RED),
                     FeedEntryType::Amendment => ("&&", theme::CYAN),
-                    FeedEntryType::DirectAddress => ("->", Color::Magenta),
+                    FeedEntryType::DirectAddress => ("->", theme::SECONDARY),
                 };
 
                 let content_max =
@@ -1669,7 +1669,7 @@ impl SimulationScreen {
                 let infd_short = infd.split_whitespace().last().unwrap_or(infd);
                 persu_spans.push(Span::styled(
                     format!("{}>{} ({:.2}) ", inf_short, infd_short, str_val),
-                    Style::default().fg(Color::Magenta),
+                    Style::default().fg(theme::SECONDARY),
                 ));
             }
             lines.push(Line::from(persu_spans));
@@ -1795,7 +1795,7 @@ impl SimulationScreen {
             Span::styled(
                 format!(" {} ", status),
                 Style::default()
-                    .fg(Color::Black)
+                    .fg(theme::BG)
                     .bg(status_color)
                     .add_modifier(Modifier::BOLD),
             ),
@@ -1869,7 +1869,7 @@ impl SimulationScreen {
 
         // Clear background
         f.render_widget(ratatui::widgets::Clear, overlay);
-        let bg = Block::default().style(Style::default().bg(Color::Rgb(15, 15, 20)));
+        let bg = Block::default().style(Style::default().bg(theme::BG));
         f.render_widget(bg, overlay);
 
         let block = Block::default()
@@ -2036,11 +2036,11 @@ fn sentiment_indicator(score: f64) -> (String, Color) {
     let (symbol, color) = if score > 0.3 {
         ("+", theme::GREEN)
     } else if score > 0.0 {
-        ("+", Color::Green)
+        ("+", theme::SUCCESS)
     } else if score < -0.3 {
         ("-", theme::RED)
     } else if score < 0.0 {
-        ("-", Color::Yellow)
+        ("-", theme::WARNING)
     } else {
         ("=", theme::DIM_GRAY)
     };

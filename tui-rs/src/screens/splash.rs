@@ -65,10 +65,10 @@ impl SplashScreen {
         let elapsed = self.start_time.elapsed().as_secs_f64();
         let opacity = (1.0 - (-3.0 * elapsed).exp()).clamp(0.0, 1.0);
 
-        // Color lerp from dark (#1C1C1E) to primary (#5f87ff)
-        let r = (0x1C as f64 + (0x5F - 0x1C) as f64 * opacity) as u8;
-        let g = (0x1C as f64 + (0x87 - 0x1C) as f64 * opacity) as u8;
-        let b = (0x1E as f64 + (0xFF - 0x1E) as f64 * opacity) as u8;
+        // Color lerp from bg (#1e1e2e) to primary (#89b4fa)
+        let r = (0x1e as f64 + (0x89 - 0x1e) as f64 * opacity) as u8;
+        let g = (0x1e as f64 + (0xb4 - 0x1e) as f64 * opacity) as u8;
+        let b = (0x2e as f64 + (0xfa - 0x2e) as f64 * opacity) as u8;
         let banner_color = ratatui::style::Color::Rgb(r, g, b);
 
         let banner_lines: Vec<Line> = BANNER
