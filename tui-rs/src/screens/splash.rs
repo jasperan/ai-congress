@@ -92,18 +92,18 @@ impl SplashScreen {
 
         // Status line with colored dot
         let (dot_color, status_text) = if self.checking {
-            (theme::YELLOW, "Connecting to backend...".to_string())
+            (theme::WARNING, "Connecting to backend...".to_string())
         } else if self.connected {
-            (theme::GREEN, format!("Connected — {} models available", self.model_count))
+            (theme::SUCCESS, format!("Connected — {} models available", self.model_count))
         } else if let Some(ref err) = self.error_msg {
-            (theme::RED, format!("Connection failed: {}", err))
+            (theme::ERROR, format!("Connection failed: {}", err))
         } else {
-            (theme::GRAY, "Waiting...".to_string())
+            (theme::SUBTEXT, "Waiting...".to_string())
         };
 
         let status = Paragraph::new(Line::from(vec![
             Span::styled("● ", Style::default().fg(dot_color)),
-            Span::styled(status_text, Style::default().fg(theme::GRAY)),
+            Span::styled(status_text, Style::default().fg(theme::SUBTEXT)),
         ]))
         .alignment(Alignment::Center);
         f.render_widget(status, chunks[2]);
@@ -118,7 +118,7 @@ impl SplashScreen {
         };
         let hints = Paragraph::new(Line::from(Span::styled(
             hint,
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         )))
         .alignment(Alignment::Center);
         f.render_widget(hints, chunks[3]);

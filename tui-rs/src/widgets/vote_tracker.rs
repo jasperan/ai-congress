@@ -11,7 +11,7 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
     let block = Block::default()
         .title(" Vote Tracker ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::CYAN));
+        .border_style(Style::default().fg(theme::INFO));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -27,28 +27,28 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
         .total_agents
         .saturating_sub((data.yea + data.nay + data.abstain) as usize);
     lines.push(Line::from(vec![
-        Span::styled("YEA: ", Style::default().fg(theme::DIM_GRAY)),
+        Span::styled("YEA: ", Style::default().fg(theme::MUTED)),
         Span::styled(
             format!("{}", data.yea),
             Style::default()
-                .fg(theme::GREEN)
+                .fg(theme::SUCCESS)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  NAY: ", Style::default().fg(theme::DIM_GRAY)),
+        Span::styled("  NAY: ", Style::default().fg(theme::MUTED)),
         Span::styled(
             format!("{}", data.nay),
             Style::default()
-                .fg(theme::RED)
+                .fg(theme::ERROR)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  ABSTAIN: ", Style::default().fg(theme::DIM_GRAY)),
+        Span::styled("  ABSTAIN: ", Style::default().fg(theme::MUTED)),
         Span::styled(
             format!("{}", data.abstain),
-            Style::default().fg(theme::YELLOW),
+            Style::default().fg(theme::WARNING),
         ),
         Span::styled(
             format!("  PENDING: {}", pending),
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         ),
     ]));
 
@@ -76,18 +76,18 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
         let filled = (conf / 100.0 * bar_width as f64).round() as usize;
         let empty = bar_width.saturating_sub(filled);
         lines.push(Line::from(vec![
-            Span::styled("Confidence: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("Confidence: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 "█".repeat(filled),
-                Style::default().fg(theme::GREEN),
+                Style::default().fg(theme::SUCCESS),
             ),
             Span::styled(
                 "░".repeat(empty),
-                Style::default().fg(theme::DARK_GRAY),
+                Style::default().fg(theme::DIM),
             ),
             Span::styled(
                 format!(" {:.1}%", conf),
-                Style::default().fg(theme::CYAN),
+                Style::default().fg(theme::INFO),
             ),
         ]));
     }
@@ -100,15 +100,15 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
             lines.push(Line::from(vec![
                 Span::styled(
                     format!("{:>12} ", name),
-                    Style::default().fg(theme::ACCENT),
+                    Style::default().fg(theme::INFO),
                 ),
                 Span::styled(
                     "█".repeat(filled),
-                    Style::default().fg(theme::BLUE),
+                    Style::default().fg(theme::PRIMARY),
                 ),
                 Span::styled(
                     format!(" {:.2}", weight),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ),
             ]));
         }
@@ -129,7 +129,7 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
                 let to_last = to.split_whitespace().last().unwrap_or(to);
                 Span::styled(
                     format!("{}>{}({:.2}) ", from_last, to_last, strength),
-                    Style::default().fg(theme::PURPLE),
+                    Style::default().fg(theme::SECONDARY),
                 )
             })
             .collect();
@@ -141,9 +141,9 @@ pub fn draw_vote_tracker(f: &mut Frame, area: Rect, data: &VoteTrackerData) {
     // Result banner
     if let Some(ref result) = data.result {
         let color = match result.to_uppercase().as_str() {
-            r if r.contains("PASSED") || r.contains("YEA") => theme::GREEN,
-            r if r.contains("FAILED") || r.contains("NAY") => theme::RED,
-            _ => theme::YELLOW,
+            r if r.contains("PASSED") || r.contains("YEA") => theme::SUCCESS,
+            r if r.contains("FAILED") || r.contains("NAY") => theme::ERROR,
+            _ => theme::WARNING,
         };
         lines.push(Line::from(Span::styled(
             format!("RESULT: {}", result),

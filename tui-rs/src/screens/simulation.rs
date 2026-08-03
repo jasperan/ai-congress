@@ -1003,38 +1003,38 @@ impl SimulationScreen {
             Span::styled(
                 " AI CONGRESS ",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
+            Span::styled(" | ", Style::default().fg(theme::DIM)),
             Span::styled(
                 format!("Tick {}/{}", self.current_tick, self.max_ticks),
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
+            Span::styled(" | ", Style::default().fg(theme::DIM)),
             Span::styled(
                 &self.phase_name,
                 Style::default()
-                    .fg(theme::YELLOW)
+                    .fg(theme::WARNING)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
-            Span::styled(&self.model, Style::default().fg(theme::PURPLE)),
-            Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)),
+            Span::styled(" | ", Style::default().fg(theme::DIM)),
+            Span::styled(&self.model, Style::default().fg(theme::SECONDARY)),
+            Span::styled(" | ", Style::default().fg(theme::DIM)),
             Span::styled(
                 format!("{:.1} tok/s", tps),
-                Style::default().fg(theme::GREEN),
+                Style::default().fg(theme::SUCCESS),
             ),
         ];
 
         if let Some(ref fb) = self.filibuster {
             if fb.active {
-                title_spans.push(Span::styled(" | ", Style::default().fg(theme::DARK_GRAY)));
+                title_spans.push(Span::styled(" | ", Style::default().fg(theme::DIM)));
                 title_spans.push(Span::styled(
                     format!(" FILIBUSTER: {} ", fb.agent_name),
                     Style::default()
                         .fg(theme::BG)
-                        .bg(theme::RED)
+                        .bg(theme::ERROR)
                         .add_modifier(Modifier::BOLD),
                 ));
             }
@@ -1043,10 +1043,10 @@ impl SimulationScreen {
         let title_line = Line::from(title_spans);
 
         let topic_line = Line::from(vec![
-            Span::styled(" Topic: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled(" Topic: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 truncate(&self.topic, area.width as usize - 10),
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
         ]);
 
@@ -1061,7 +1061,7 @@ impl SimulationScreen {
 
         let block = Block::default()
             .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
 
         let text = vec![title_line, topic_line, progress_line];
         let paragraph = Paragraph::new(text).block(block);
@@ -1162,7 +1162,7 @@ impl SimulationScreen {
         let block = Block::default()
             .title(" Prediction ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::YELLOW));
+            .border_style(Style::default().fg(theme::WARNING));
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -1180,13 +1180,13 @@ impl SimulationScreen {
         let nay_chars = bar_width.saturating_sub(yea_chars);
 
         let bar = Line::from(vec![
-            Span::styled("█".repeat(yea_chars), Style::default().fg(theme::GREEN)),
-            Span::styled("█".repeat(nay_chars), Style::default().fg(theme::RED)),
+            Span::styled("█".repeat(yea_chars), Style::default().fg(theme::SUCCESS)),
+            Span::styled("█".repeat(nay_chars), Style::default().fg(theme::ERROR)),
         ]);
         let label = Line::from(vec![
-            Span::styled(format!(" YEA {:.0}%", yea_pct * 100.0), Style::default().fg(theme::GREEN)),
-            Span::styled(" │ ", Style::default().fg(theme::DARK_GRAY)),
-            Span::styled(format!("NAY {:.0}% ", (1.0 - yea_pct) * 100.0), Style::default().fg(theme::RED)),
+            Span::styled(format!(" YEA {:.0}%", yea_pct * 100.0), Style::default().fg(theme::SUCCESS)),
+            Span::styled(" │ ", Style::default().fg(theme::DIM)),
+            Span::styled(format!("NAY {:.0}% ", (1.0 - yea_pct) * 100.0), Style::default().fg(theme::ERROR)),
         ]);
 
         let para = Paragraph::new(vec![bar, label]).alignment(Alignment::Center);
@@ -1197,7 +1197,7 @@ impl SimulationScreen {
         let block = Block::default()
             .title(" Bill Text Changes ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::CYAN));
+            .border_style(Style::default().fg(theme::INFO));
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -1211,9 +1211,9 @@ impl SimulationScreen {
             .take(inner.height as usize)
             .map(|change| {
                 let (sign, color) = match change.tag() {
-                    ChangeTag::Delete => ("-", theme::RED),
-                    ChangeTag::Insert => ("+", theme::GREEN),
-                    ChangeTag::Equal => (" ", theme::GRAY),
+                    ChangeTag::Delete => ("-", theme::ERROR),
+                    ChangeTag::Insert => ("+", theme::SUCCESS),
+                    ChangeTag::Equal => (" ", theme::SUBTEXT),
                 };
                 Line::from(Span::styled(
                     format!("{} {}", sign, change.value().trim_end()),
@@ -1231,7 +1231,7 @@ impl SimulationScreen {
             let block = Block::default()
                 .title(" Agents ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::DARK_GRAY));
+                .border_style(Style::default().fg(theme::DIM));
             let p = Paragraph::new("Waiting for agents...").block(block);
             f.render_widget(p, area);
             return;
@@ -1277,11 +1277,11 @@ impl SimulationScreen {
         let sentiment = self.agent_sentiment.get(&agent.name).copied().unwrap_or(0.0);
 
         let border_color = if is_active {
-            theme::GREEN
+            theme::SUCCESS
         } else if is_selected {
-            theme::CYAN
+            theme::INFO
         } else {
-            theme::DARK_GRAY
+            theme::DIM
         };
 
         let party_char = party_abbrev(&agent.party);
@@ -1293,16 +1293,16 @@ impl SimulationScreen {
             Span::styled(
                 format!(" {} generating... ", frame),
                 Style::default()
-                    .fg(theme::GREEN)
+                    .fg(theme::SUCCESS)
                     .add_modifier(Modifier::BOLD),
             )
         } else if let Some(s) = stream {
             Span::styled(
                 format!(" idle {}ms ", s.latency_ms),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             )
         } else {
-            Span::styled(" waiting ", Style::default().fg(theme::DIM_GRAY))
+            Span::styled(" waiting ", Style::default().fg(theme::MUTED))
         };
 
         let title = Line::from(vec![
@@ -1355,7 +1355,7 @@ impl SimulationScreen {
         let paragraph = Paragraph::new(display_text)
             .block(block)
             .wrap(Wrap { trim: false })
-            .style(Style::default().fg(theme::ACCENT));
+            .style(Style::default().fg(theme::INFO));
 
         f.render_widget(paragraph, area);
     }
@@ -1367,7 +1367,7 @@ impl SimulationScreen {
             let block = Block::default()
                 .title(" Grid ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::DARK_GRAY));
+                .border_style(Style::default().fg(theme::DIM));
             let p = Paragraph::new("Waiting for agents...").block(block);
             f.render_widget(p, area);
             return;
@@ -1413,9 +1413,9 @@ impl SimulationScreen {
         let sentiment = self.agent_sentiment.get(&agent.name).copied().unwrap_or(0.0);
 
         let border_color = if is_active {
-            theme::GREEN
+            theme::SUCCESS
         } else {
-            theme::DARK_GRAY
+            theme::DIM
         };
         let party_color = theme::party_color(&agent.party);
         let party_char = party_abbrev(&agent.party);
@@ -1456,17 +1456,17 @@ impl SimulationScreen {
         let status_line = if is_active {
             Line::from(Span::styled(
                 "generating...",
-                Style::default().fg(theme::GREEN),
+                Style::default().fg(theme::SUCCESS),
             ))
         } else if let Some(s) = stream {
             Line::from(Span::styled(
                 format!("idle {}ms", s.latency_ms),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ))
         } else {
             Line::from(Span::styled(
                 "waiting",
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ))
         };
 
@@ -1496,7 +1496,7 @@ impl SimulationScreen {
         if !snippet.is_empty() {
             lines.push(Line::from(Span::styled(
                 truncate(&snippet, inner_w),
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             )));
         }
         lines.push(vote_line);
@@ -1515,21 +1515,21 @@ impl SimulationScreen {
                 Span::styled(
                     " Discussion Feed ",
                     Style::default()
-                        .fg(theme::CYAN)
+                        .fg(theme::INFO)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!(" ({} msgs) ", self.feed.len()),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ),
             ]))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
 
         if self.feed.is_empty() {
             let p = Paragraph::new("Waiting for discussion to begin...")
                 .block(block)
-                .style(Style::default().fg(theme::DIM_GRAY));
+                .style(Style::default().fg(theme::MUTED));
             f.render_widget(p, area);
             return;
         }
@@ -1546,12 +1546,12 @@ impl SimulationScreen {
             .map(|entry| {
                 let party_color = theme::party_color(&entry.party);
                 let (icon, icon_color) = match entry.entry_type {
-                    FeedEntryType::Speech => (">>", theme::ACCENT),
-                    FeedEntryType::Vote => ("##", theme::YELLOW),
-                    FeedEntryType::System => ("**", theme::DIM_GRAY),
-                    FeedEntryType::Lobby => ("$$", theme::PURPLE),
-                    FeedEntryType::Filibuster => ("!!", theme::RED),
-                    FeedEntryType::Amendment => ("&&", theme::CYAN),
+                    FeedEntryType::Speech => (">>", theme::INFO),
+                    FeedEntryType::Vote => ("##", theme::WARNING),
+                    FeedEntryType::System => ("**", theme::MUTED),
+                    FeedEntryType::Lobby => ("$$", theme::SECONDARY),
+                    FeedEntryType::Filibuster => ("!!", theme::ERROR),
+                    FeedEntryType::Amendment => ("&&", theme::INFO),
                     FeedEntryType::DirectAddress => ("->", theme::SECONDARY),
                 };
 
@@ -1562,7 +1562,7 @@ impl SimulationScreen {
                 let line = Line::from(vec![
                     Span::styled(
                         format!("[T{:>3}] ", entry.tick),
-                        Style::default().fg(theme::DIM_GRAY),
+                        Style::default().fg(theme::MUTED),
                     ),
                     Span::styled(format!("{} ", icon), Style::default().fg(icon_color)),
                     Span::styled(
@@ -1571,7 +1571,7 @@ impl SimulationScreen {
                             .fg(party_color)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(content_str, Style::default().fg(theme::GRAY)),
+                    Span::styled(content_str, Style::default().fg(theme::SUBTEXT)),
                 ]);
 
                 ListItem::new(line)
@@ -1593,39 +1593,39 @@ impl SimulationScreen {
             .title(Line::from(vec![Span::styled(
                 " Vote Tracker ",
                 Style::default()
-                    .fg(theme::YELLOW)
+                    .fg(theme::WARNING)
                     .add_modifier(Modifier::BOLD),
             )]))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
 
         let mut lines: Vec<Line> = Vec::new();
 
         lines.push(Line::from(vec![
-            Span::styled(" YEA: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled(" YEA: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 format!("{}", self.yea_count),
                 Style::default()
-                    .fg(theme::GREEN)
+                    .fg(theme::SUCCESS)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  NAY: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  NAY: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 format!("{}", self.nay_count),
                 Style::default()
-                    .fg(theme::RED)
+                    .fg(theme::ERROR)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  ABSTAIN: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  ABSTAIN: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 format!("{}", self.abstain_count),
                 Style::default()
-                    .fg(theme::YELLOW)
+                    .fg(theme::WARNING)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("  PENDING: {}", pending),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ),
         ]));
 
@@ -1645,7 +1645,7 @@ impl SimulationScreen {
 
                 vote_spans.push(Span::styled(
                     format!("{}({}): ", short, party),
-                    Style::default().fg(theme::GRAY),
+                    Style::default().fg(theme::SUBTEXT),
                 ));
                 vote_spans.push(Span::styled(
                     format!("{} ", vote.vote.to_uppercase()),
@@ -1659,7 +1659,7 @@ impl SimulationScreen {
         if !self.persuasion_edges.is_empty() {
             let mut persu_spans = vec![Span::styled(
                 " Influence: ",
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             )];
             let mut sorted_edges = self.persuasion_edges.clone();
             sorted_edges
@@ -1677,11 +1677,11 @@ impl SimulationScreen {
 
         if let Some(ref result) = self.simulation_result {
             let result_color = if result.contains("PASSED") {
-                theme::GREEN
+                theme::SUCCESS
             } else if result.contains("FAILED") {
-                theme::RED
+                theme::ERROR
             } else {
-                theme::YELLOW
+                theme::WARNING
             };
 
             lines.push(Line::from(vec![Span::styled(
@@ -1705,19 +1705,19 @@ impl SimulationScreen {
             .title(Line::from(vec![Span::styled(
                 " Amendments ",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             )]))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
 
         let mut lines: Vec<Line> = Vec::new();
 
         for amend in &self.amendments {
             let status_color = match amend.status.as_str() {
-                "passed" => theme::GREEN,
-                "failed" => theme::RED,
-                _ => theme::YELLOW,
+                "passed" => theme::SUCCESS,
+                "failed" => theme::ERROR,
+                _ => theme::WARNING,
             };
 
             let proposer_short = amend
@@ -1731,7 +1731,7 @@ impl SimulationScreen {
                 Span::styled(
                     format!(" #{} ", amend.id),
                     Style::default()
-                        .fg(theme::CYAN)
+                        .fg(theme::INFO)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -1742,11 +1742,11 @@ impl SimulationScreen {
                 ),
                 Span::styled(
                     format!("by {} ", proposer_short),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ),
                 Span::styled(
                     truncate(&amend.text, inner_w.saturating_sub(30)),
-                    Style::default().fg(theme::GRAY),
+                    Style::default().fg(theme::SUBTEXT),
                 ),
             ]));
 
@@ -1755,11 +1755,11 @@ impl SimulationScreen {
                     Span::raw("   "),
                     Span::styled(
                         format!("YEA: {} ", amend.yea),
-                        Style::default().fg(theme::GREEN),
+                        Style::default().fg(theme::SUCCESS),
                     ),
                     Span::styled(
                         format!("NAY: {}", amend.nay),
-                        Style::default().fg(theme::RED),
+                        Style::default().fg(theme::ERROR),
                     ),
                 ]));
             }
@@ -1768,7 +1768,7 @@ impl SimulationScreen {
         if lines.is_empty() {
             lines.push(Line::from(Span::styled(
                 " No amendments proposed yet",
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             )));
         }
 
@@ -1786,9 +1786,9 @@ impl SimulationScreen {
 
         let status = if self.running { "LIVE" } else { "DONE" };
         let status_color = if self.running {
-            theme::GREEN
+            theme::SUCCESS
         } else {
-            theme::DIM_GRAY
+            theme::MUTED
         };
 
         let mut spans = vec![
@@ -1800,14 +1800,14 @@ impl SimulationScreen {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
-            Span::styled(sparkline, Style::default().fg(theme::CYAN)),
+            Span::styled(sparkline, Style::default().fg(theme::INFO)),
             Span::styled(
                 format!(" {:.1} tok/s", tps),
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
             Span::styled(
                 format!("  {} total", self.total_tokens),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ),
         ];
 
@@ -1825,38 +1825,38 @@ impl SimulationScreen {
             Span::styled(
                 "Tab",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":layout ", Style::default().fg(theme::GRAY)),
+            Span::styled(":layout ", Style::default().fg(theme::SUBTEXT)),
             Span::styled(
                 "j/k",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":agent ", Style::default().fg(theme::GRAY)),
+            Span::styled(":agent ", Style::default().fg(theme::SUBTEXT)),
             Span::styled(
                 "g",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":graph ", Style::default().fg(theme::GRAY)),
+            Span::styled(":graph ", Style::default().fg(theme::SUBTEXT)),
             Span::styled(
                 "Enter",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":inspect ", Style::default().fg(theme::GRAY)),
+            Span::styled(":inspect ", Style::default().fg(theme::SUBTEXT)),
             Span::styled(
                 "q",
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(":quit", Style::default().fg(theme::GRAY)),
+            Span::styled(":quit", Style::default().fg(theme::SUBTEXT)),
         ]);
 
         let line = Line::from(spans);
@@ -1875,7 +1875,7 @@ impl SimulationScreen {
         let block = Block::default()
             .title(format!(" Agent: {} ", agent_name))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::CYAN));
+            .border_style(Style::default().fg(theme::INFO));
         let inner = block.inner(overlay);
         f.render_widget(block, overlay);
 
@@ -1900,14 +1900,14 @@ impl SimulationScreen {
                 let label = format!("Sentiment: {:.2} ", current);
                 let lines = vec![
                     Line::from(vec![
-                        Span::styled(label, Style::default().fg(theme::DIM_GRAY)),
+                        Span::styled(label, Style::default().fg(theme::MUTED)),
                     ]),
                     sparkline,
                 ];
                 let block = Block::default()
                     .title(" Sentiment Timeline ")
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme::DARK_GRAY));
+                    .border_style(Style::default().fg(theme::DIM));
                 let para = Paragraph::new(lines).block(block);
                 f.render_widget(para, chunks[0]);
             }
@@ -1925,35 +1925,35 @@ impl SimulationScreen {
             let mut lines = Vec::new();
             if !incoming.is_empty() {
                 lines.push(Line::from(vec![
-                    Span::styled("← Influenced by: ", Style::default().fg(theme::DIM_GRAY)),
+                    Span::styled("← Influenced by: ", Style::default().fg(theme::MUTED)),
                 ]));
                 let spans: Vec<Span> = incoming.iter().take(5).map(|(from, _, strength)| {
                     let last = from.split_whitespace().last().unwrap_or(from.as_str());
-                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::ACCENT))
+                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::INFO))
                 }).collect();
                 lines.push(Line::from(spans));
             }
             if !outgoing.is_empty() {
                 lines.push(Line::from(vec![
-                    Span::styled("→ Influenced: ", Style::default().fg(theme::DIM_GRAY)),
+                    Span::styled("→ Influenced: ", Style::default().fg(theme::MUTED)),
                 ]));
                 let spans: Vec<Span> = outgoing.iter().take(5).map(|(_, to, strength)| {
                     let last = to.split_whitespace().last().unwrap_or(to.as_str());
-                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::PURPLE))
+                    Span::styled(format!("{} ({:.2})  ", last, strength), Style::default().fg(theme::SECONDARY))
                 }).collect();
                 lines.push(Line::from(spans));
             }
             if lines.is_empty() {
                 lines.push(Line::from(Span::styled(
                     "No influence data yet",
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 )));
             }
 
             let block = Block::default()
                 .title(" Influence Map ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::DARK_GRAY));
+                .border_style(Style::default().fg(theme::DIM));
             let para = Paragraph::new(lines).block(block);
             f.render_widget(para, chunks[1]);
         }
@@ -1993,9 +1993,9 @@ impl SimulationScreen {
                         entry.content.clone()
                     };
                     Line::from(vec![
-                        Span::styled(format!("[T{:>3}] ", entry.tick), Style::default().fg(theme::DIM_GRAY)),
-                        Span::styled(format!("{} ", icon), Style::default().fg(theme::ACCENT)),
-                        Span::styled(content, Style::default().fg(theme::GRAY)),
+                        Span::styled(format!("[T{:>3}] ", entry.tick), Style::default().fg(theme::MUTED)),
+                        Span::styled(format!("{} ", icon), Style::default().fg(theme::INFO)),
+                        Span::styled(content, Style::default().fg(theme::SUBTEXT)),
                     ])
                 })
                 .collect();
@@ -2003,7 +2003,7 @@ impl SimulationScreen {
             let block = Block::default()
                 .title(format!(" History ({} entries) ", speeches.len()))
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::DARK_GRAY));
+                .border_style(Style::default().fg(theme::DIM));
             let para = Paragraph::new(lines).block(block);
             f.render_widget(para, chunks[2]);
         }
@@ -2034,15 +2034,15 @@ fn sentiment_indicator(score: f64) -> (String, Color) {
     let filled = ((score.abs() * bar_width as f64).round() as usize).min(bar_width);
 
     let (symbol, color) = if score > 0.3 {
-        ("+", theme::GREEN)
+        ("+", theme::SUCCESS)
     } else if score > 0.0 {
         ("+", theme::SUCCESS)
     } else if score < -0.3 {
-        ("-", theme::RED)
+        ("-", theme::ERROR)
     } else if score < 0.0 {
         ("-", theme::WARNING)
     } else {
-        ("=", theme::DIM_GRAY)
+        ("=", theme::MUTED)
     };
 
     let bar = format!("{}{:.1}", symbol.repeat(filled.max(1_usize)), score);
@@ -2071,11 +2071,11 @@ fn make_progress_bar(progress: f64, width: usize) -> String {
 
 fn progress_color(progress: f64) -> Color {
     if progress >= 0.9 {
-        theme::GREEN
+        theme::SUCCESS
     } else if progress >= 0.5 {
-        theme::CYAN
+        theme::INFO
     } else {
-        theme::BLUE
+        theme::PRIMARY
     }
 }
 

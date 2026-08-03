@@ -85,7 +85,7 @@ pub fn draw_help_overlay(
     let block = Block::default()
         .title(" Help ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::CYAN));
+        .border_style(Style::default().fg(theme::INFO));
     let inner = block.inner(popup);
     f.render_widget(block, popup);
 
@@ -95,7 +95,7 @@ pub fn draw_help_overlay(
     lines.push(Line::from(Span::styled(
         format!("─── {} ───", screen_name),
         Style::default()
-            .fg(theme::YELLOW)
+            .fg(theme::WARNING)
             .add_modifier(Modifier::BOLD),
     )));
 
@@ -103,9 +103,9 @@ pub fn draw_help_overlay(
         lines.push(Line::from(vec![
             Span::styled(
                 format!("{:<14}", kb.key),
-                Style::default().fg(theme::CYAN),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled(kb.description, Style::default().fg(theme::GRAY)),
+            Span::styled(kb.description, Style::default().fg(theme::SUBTEXT)),
         ]));
     }
 
@@ -115,7 +115,7 @@ pub fn draw_help_overlay(
     lines.push(Line::from(Span::styled(
         "─── Global ───",
         Style::default()
-            .fg(theme::YELLOW)
+            .fg(theme::WARNING)
             .add_modifier(Modifier::BOLD),
     )));
 
@@ -123,9 +123,9 @@ pub fn draw_help_overlay(
         lines.push(Line::from(vec![
             Span::styled(
                 format!("{:<14}", kb.key),
-                Style::default().fg(theme::CYAN),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled(kb.description, Style::default().fg(theme::GRAY)),
+            Span::styled(kb.description, Style::default().fg(theme::SUBTEXT)),
         ]));
     }
 

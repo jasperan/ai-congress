@@ -26,7 +26,7 @@ pub fn draw_persuasion_graph(
     let block = Block::default()
         .title(" Persuasion Network ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::PURPLE));
+        .border_style(Style::default().fg(theme::SECONDARY));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -37,7 +37,7 @@ pub fn draw_persuasion_graph(
 
     let w = inner.width as usize;
     let h = inner.height as usize;
-    let mut buf: Vec<Vec<(char, Color)>> = vec![vec![(' ', theme::DARK_GRAY); w]; h];
+    let mut buf: Vec<Vec<(char, Color)>> = vec![vec![(' ', theme::DIM); w]; h];
 
     // Position nodes in circle
     let cx = w as f64 / 2.0;
@@ -62,9 +62,9 @@ pub fn draw_persuasion_graph(
         let (x0, y0) = positions[edge.from];
         let (x1, y1) = positions[edge.to];
         let color = if edge.strength > 0.5 {
-            theme::GREEN
+            theme::SUCCESS
         } else {
-            theme::RED
+            theme::ERROR
         };
         let ch = if edge.strength > 0.7 {
             '━'

@@ -10,22 +10,22 @@ use crate::theme;
 
 pub fn draw_agent_pane(f: &mut Frame, area: Rect, data: &AgentPaneData) {
     let border_color = if data.active {
-        theme::GREEN
+        theme::SUCCESS
     } else if data.selected {
-        theme::CYAN
+        theme::INFO
     } else {
-        theme::DARK_GRAY
+        theme::DIM
     };
 
     let status = if data.active {
-        Span::styled(" [streaming] ", Style::default().fg(theme::GREEN))
+        Span::styled(" [streaming] ", Style::default().fg(theme::SUCCESS))
     } else if data.latency_ms > 0 {
         Span::styled(
             format!(" [{}ms] ", data.latency_ms),
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         )
     } else {
-        Span::styled(" [idle] ", Style::default().fg(theme::DIM_GRAY))
+        Span::styled(" [idle] ", Style::default().fg(theme::MUTED))
     };
 
     // Build title line
@@ -33,14 +33,14 @@ pub fn draw_agent_pane(f: &mut Frame, area: Rect, data: &AgentPaneData) {
         Span::styled(
             data.name.clone(),
             Style::default()
-                .fg(theme::CYAN)
+                .fg(theme::INFO)
                 .add_modifier(Modifier::BOLD),
         ),
     ];
     if let Some(ref sub) = data.subtitle {
         title_spans.push(Span::styled(
             format!(" ({})", sub),
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         ));
     }
 
@@ -92,7 +92,7 @@ pub fn draw_agent_pane(f: &mut Frame, area: Rect, data: &AgentPaneData) {
         for line_str in content.lines() {
             lines.push(Line::from(Span::styled(
                 line_str.to_string(),
-                Style::default().fg(theme::GRAY),
+                Style::default().fg(theme::SUBTEXT),
             )));
         }
     }
@@ -103,11 +103,11 @@ pub fn draw_agent_pane(f: &mut Frame, area: Rect, data: &AgentPaneData) {
 
 fn sentiment_indicator(score: f64) -> (String, Color) {
     let (prefix, color) = if score > 0.1 {
-        ("+", theme::GREEN)
+        ("+", theme::SUCCESS)
     } else if score < -0.1 {
-        ("-", theme::RED)
+        ("-", theme::ERROR)
     } else {
-        ("=", theme::YELLOW)
+        ("=", theme::WARNING)
     };
     (format!("{}{:.1}", prefix, score.abs()), color)
 }
@@ -125,11 +125,11 @@ pub fn render_sentiment_sparkline(history: &[f64], width: usize) -> Line<'static
             let idx = (normalized * 7.0).round() as usize;
             let ch = chars[idx.min(7)];
             let color = if val > 0.1 {
-                theme::GREEN
+                theme::SUCCESS
             } else if val < -0.1 {
-                theme::RED
+                theme::ERROR
             } else {
-                theme::YELLOW
+                theme::WARNING
             };
             Span::styled(ch.to_string(), Style::default().fg(color))
         })

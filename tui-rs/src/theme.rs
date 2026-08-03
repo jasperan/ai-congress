@@ -16,20 +16,6 @@ pub const INFO: Color = Color::Rgb(0x89, 0xdc, 0xeb);
 pub const SUCCESS: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
 pub const WARNING: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
 pub const ERROR: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
-
-// ── Legacy aliases (preserve existing call sites) ────────────────────────────
-
-pub const CYAN: Color = INFO;
-pub const BLUE: Color = PRIMARY;
-pub const GREEN: Color = SUCCESS;
-pub const RED: Color = ERROR;
-pub const YELLOW: Color = WARNING;
-pub const GRAY: Color = SUBTEXT;
-pub const DIM_GRAY: Color = MUTED;
-pub const DARK_GRAY: Color = DIM;
-pub const ACCENT: Color = INFO;
-pub const PURPLE: Color = SECONDARY;
-
 // ── Party colors ─────────────────────────────────────────────────────────────
 
 pub const REPUBLICAN: Color = ERROR;

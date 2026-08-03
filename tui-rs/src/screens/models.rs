@@ -156,8 +156,8 @@ impl ModelsScreen {
         if self.loading {
             let spinner_frame = spinners::dots().current_frame();
             let loading = Paragraph::new(Line::from(vec![
-                Span::styled(spinner_frame, Style::default().fg(theme::CYAN)),
-                Span::styled(" Loading models...", Style::default().fg(theme::YELLOW)),
+                Span::styled(spinner_frame, Style::default().fg(theme::INFO)),
+                Span::styled(" Loading models...", Style::default().fg(theme::WARNING)),
             ]))
             .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(loading, area);
@@ -167,7 +167,7 @@ impl ModelsScreen {
         if let Some(ref err) = self.error_msg {
             let error = Paragraph::new(format!("Error: {}\n\nq: back", err))
                 .alignment(ratatui::layout::Alignment::Center)
-                .style(Style::default().fg(theme::RED));
+                .style(Style::default().fg(theme::ERROR));
             f.render_widget(error, area);
             return;
         }
@@ -188,10 +188,10 @@ impl ModelsScreen {
             let filter_block = Block::default()
                 .title(" Filter ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::YELLOW));
+                .border_style(Style::default().fg(theme::WARNING));
             let filter_text = Paragraph::new(self.filter_input.value())
                 .block(filter_block)
-                .style(Style::default().fg(theme::CYAN));
+                .style(Style::default().fg(theme::INFO));
             f.render_widget(filter_text, chunks[0]);
         }
 
@@ -206,14 +206,14 @@ impl ModelsScreen {
                 let is_focused = self.list_state.selected() == Some(list_idx);
 
                 let checkbox = if is_selected { "[✓]" } else { "[ ]" };
-                let checkbox_color = if is_selected { theme::GREEN } else { theme::DIM_GRAY };
+                let checkbox_color = if is_selected { theme::SUCCESS } else { theme::MUTED };
 
                 let name_style = if is_focused {
                     Style::default()
-                        .fg(theme::CYAN)
+                        .fg(theme::INFO)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(theme::ACCENT)
+                    Style::default().fg(theme::INFO)
                 };
 
                 let size_str = format_size(model.size);
@@ -231,13 +231,13 @@ impl ModelsScreen {
                     Span::styled(&model.name, name_style),
                     Span::styled(
                         format!("  (w:{:.2})", model.weight),
-                        Style::default().fg(theme::DIM_GRAY),
+                        Style::default().fg(theme::MUTED),
                     ),
                 ]);
                 let line2 = Line::from(vec![
                     Span::styled(
                         format!("    {}  [{}]", size_str, backend),
-                        Style::default().fg(theme::DIM_GRAY),
+                        Style::default().fg(theme::MUTED),
                     ),
                 ]);
 
@@ -248,7 +248,7 @@ impl ModelsScreen {
         let list_block = Block::default()
             .title(" Available Models ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::CYAN));
+            .border_style(Style::default().fg(theme::INFO));
 
         let list = List::new(items)
             .block(list_block)
@@ -268,7 +268,7 @@ impl ModelsScreen {
         };
         let footer = Paragraph::new(Line::from(Span::styled(
             footer_text,
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         )));
         f.render_widget(footer, chunks[2]);
     }

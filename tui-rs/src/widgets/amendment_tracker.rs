@@ -11,7 +11,7 @@ pub fn draw_amendment_tracker(f: &mut Frame, area: Rect, amendments: &[Amendment
     let block = Block::default()
         .title(" Amendments ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::CYAN));
+        .border_style(Style::default().fg(theme::INFO));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -25,9 +25,9 @@ pub fn draw_amendment_tracker(f: &mut Frame, area: Rect, amendments: &[Amendment
         .take(inner.height as usize)
         .map(|a| {
             let status_color = match a.status.as_str() {
-                "passed" => theme::GREEN,
-                "failed" => theme::RED,
-                _ => theme::YELLOW,
+                "passed" => theme::SUCCESS,
+                "failed" => theme::ERROR,
+                _ => theme::WARNING,
             };
             let proposer_last = a.proposer.split_whitespace().last().unwrap_or(&a.proposer);
             let max_text = (inner.width as usize).saturating_sub(30);
@@ -38,7 +38,7 @@ pub fn draw_amendment_tracker(f: &mut Frame, area: Rect, amendments: &[Amendment
             };
 
             let mut spans = vec![
-                Span::styled(format!("#{} ", a.id), Style::default().fg(theme::DIM_GRAY)),
+                Span::styled(format!("#{} ", a.id), Style::default().fg(theme::MUTED)),
                 Span::styled(
                     format!("[{}] ", a.status.to_uppercase()),
                     Style::default()
@@ -47,15 +47,15 @@ pub fn draw_amendment_tracker(f: &mut Frame, area: Rect, amendments: &[Amendment
                 ),
                 Span::styled(
                     format!("by {} ", proposer_last),
-                    Style::default().fg(theme::ACCENT),
+                    Style::default().fg(theme::INFO),
                 ),
-                Span::styled(text, Style::default().fg(theme::GRAY)),
+                Span::styled(text, Style::default().fg(theme::SUBTEXT)),
             ];
 
             if a.status != "pending" {
                 spans.push(Span::styled(
                     format!(" {}-{}", a.yea, a.nay),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ));
             }
 

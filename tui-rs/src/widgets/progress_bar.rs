@@ -16,9 +16,9 @@ pub fn draw_progress_bar(f: &mut Frame, area: Rect, progress: f64, label: &str) 
     let color = progress_color(progress);
 
     let line = Line::from(vec![
-        Span::styled(format!("{} ", label), Style::default().fg(theme::DIM_GRAY)),
+        Span::styled(format!("{} ", label), Style::default().fg(theme::MUTED)),
         Span::styled("█".repeat(filled), Style::default().fg(color)),
-        Span::styled("░".repeat(empty), Style::default().fg(theme::DARK_GRAY)),
+        Span::styled("░".repeat(empty), Style::default().fg(theme::DIM)),
     ]);
 
     let para = Paragraph::new(vec![line]);
@@ -27,10 +27,10 @@ pub fn draw_progress_bar(f: &mut Frame, area: Rect, progress: f64, label: &str) 
 
 pub fn progress_color(progress: f64) -> Color {
     if progress >= 0.9 {
-        theme::GREEN
+        theme::SUCCESS
     } else if progress >= 0.5 {
-        theme::CYAN
+        theme::INFO
     } else {
-        theme::BLUE
+        theme::PRIMARY
     }
 }

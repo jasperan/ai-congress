@@ -527,9 +527,9 @@ impl ChatDashboardScreen {
             "Tab:layout  j/k:nav  Enter:inspect  q:quit"
         };
         let status_line = Line::from(vec![
-            Span::styled(sparkline_str, Style::default().fg(theme::BLUE)),
-            Span::styled(format!(" {:.1}t/s  ", tps), Style::default().fg(theme::ACCENT)),
-            Span::styled(hints, Style::default().fg(theme::DIM_GRAY)),
+            Span::styled(sparkline_str, Style::default().fg(theme::PRIMARY)),
+            Span::styled(format!(" {:.1}t/s  ", tps), Style::default().fg(theme::INFO)),
+            Span::styled(hints, Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(vec![status_line]), rows[2]);
 
@@ -538,11 +538,11 @@ impl ChatDashboardScreen {
             let prompt_block = Block::default()
                 .title(" Follow-up Prompt (Enter to send, Esc to cancel) ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::CYAN));
+                .border_style(Style::default().fg(theme::INFO));
             let prompt_inner = prompt_block.inner(rows[3]);
             f.render_widget(prompt_block, rows[3]);
             let prompt_para = Paragraph::new(self.prompt_input.value())
-                .style(Style::default().fg(theme::GRAY));
+                .style(Style::default().fg(theme::SUBTEXT));
             f.render_widget(prompt_para, prompt_inner);
         }
     }
@@ -565,7 +565,7 @@ impl ChatDashboardScreen {
         let header = Line::from(vec![
             Span::styled(
                 " AI CONGRESS CHAT [GRID] ",
-                Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD),
+                Style::default().fg(theme::INFO).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!(
@@ -574,7 +574,7 @@ impl ChatDashboardScreen {
                     tps,
                     status_str
                 ),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ),
         ]);
         f.render_widget(Paragraph::new(vec![header]), rows[0]);
@@ -633,10 +633,10 @@ impl ChatDashboardScreen {
         // Status bar
         let sparkline_str = render_throughput_sparkline(&buckets_slice, 40);
         let status_line = Line::from(vec![
-            Span::styled(sparkline_str, Style::default().fg(theme::BLUE)),
+            Span::styled(sparkline_str, Style::default().fg(theme::PRIMARY)),
             Span::styled(
                 format!(" {:.1}t/s  Tab:focus  j/k:feed  q:quit/results", tps),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ),
         ]);
         f.render_widget(Paragraph::new(vec![status_line]), rows[2]);
@@ -658,7 +658,7 @@ impl ChatDashboardScreen {
                 model_name
             ))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::CYAN));
+            .border_style(Style::default().fg(theme::INFO));
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -669,7 +669,7 @@ impl ChatDashboardScreen {
         };
 
         let para = Paragraph::new(full_text)
-            .style(Style::default().fg(theme::GRAY))
+            .style(Style::default().fg(theme::SUBTEXT))
             .wrap(Wrap { trim: false })
             .scroll((self.inspector_scroll, 0));
         f.render_widget(para, inner);
@@ -684,20 +684,20 @@ impl ChatDashboardScreen {
                 Span::styled(
                     " AI CONGRESS CHAT ",
                     Style::default()
-                        .fg(theme::CYAN)
+                        .fg(theme::INFO)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!("| {} models ", self.model_order.len()),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ),
                 Span::styled(
                     format!("| {} ", self.config.mode),
-                    Style::default().fg(theme::ACCENT),
+                    Style::default().fg(theme::INFO),
                 ),
                 Span::styled(
                     format!("| {:.1} tok/s ", tps),
-                    Style::default().fg(theme::BLUE),
+                    Style::default().fg(theme::PRIMARY),
                 ),
                 Span::styled(
                     format!("| {} ", status_str),
@@ -708,13 +708,13 @@ impl ChatDashboardScreen {
             ]),
             Line::from(vec![Span::styled(
                 format!(" Prompt: {}", &self.config.prompt),
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             )]),
         ];
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
         let inner = block.inner(area);
         f.render_widget(block, area);
         f.render_widget(Paragraph::new(header_text), inner);
@@ -733,10 +733,10 @@ impl ChatDashboardScreen {
 
     fn status_color(&self) -> ratatui::style::Color {
         match self.status {
-            ChatStatus::Waiting => theme::YELLOW,
-            ChatStatus::Streaming => theme::GREEN,
-            ChatStatus::Complete => theme::CYAN,
-            ChatStatus::Error => theme::RED,
+            ChatStatus::Waiting => theme::WARNING,
+            ChatStatus::Streaming => theme::SUCCESS,
+            ChatStatus::Complete => theme::INFO,
+            ChatStatus::Error => theme::ERROR,
         }
     }
 

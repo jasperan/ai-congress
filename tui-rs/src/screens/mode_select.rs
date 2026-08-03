@@ -203,7 +203,7 @@ impl ModeSelectScreen {
         // Title
         let title = Paragraph::new(Line::from(Span::styled(
             "Launch Session",
-            Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD),
+            Style::default().fg(theme::INFO).add_modifier(Modifier::BOLD),
         )))
         .alignment(Alignment::Center);
         f.render_widget(title, chunks[0]);
@@ -212,7 +212,7 @@ impl ModeSelectScreen {
         let models_str = self.selected_models.join(", ");
         let subtitle = Paragraph::new(Line::from(Span::styled(
             format!("Models: {}", models_str),
-            Style::default().fg(theme::DIM_GRAY),
+            Style::default().fg(theme::MUTED),
         )))
         .alignment(Alignment::Center);
         f.render_widget(subtitle, chunks[1]);
@@ -230,14 +230,14 @@ impl ModeSelectScreen {
             .split(chunks[2]);
 
         let chat_border = if self.mode == SessionMode::Chat {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::DARK_GRAY)
+            Style::default().fg(theme::DIM)
         };
         let sim_border = if self.mode == SessionMode::Simulation {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::DARK_GRAY)
+            Style::default().fg(theme::DIM)
         };
 
         let chat_card = Paragraph::new(vec![
@@ -245,9 +245,9 @@ impl ModeSelectScreen {
             Line::from(Span::styled(
                 "Chat / Swarm",
                 if self.mode == SessionMode::Chat {
-                    Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme::INFO).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(theme::DIM_GRAY)
+                    Style::default().fg(theme::MUTED)
                 },
             )),
         ])
@@ -263,9 +263,9 @@ impl ModeSelectScreen {
             Line::from(Span::styled(
                 "Congressional Simulation",
                 if self.mode == SessionMode::Simulation {
-                    Style::default().fg(theme::CYAN).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme::INFO).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(theme::DIM_GRAY)
+                    Style::default().fg(theme::MUTED)
                 },
             )),
         ])
@@ -283,7 +283,7 @@ impl ModeSelectScreen {
         let config_block = Block::default()
             .title(" Configuration ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::DARK_GRAY));
+            .border_style(Style::default().fg(theme::DIM));
         let config_inner = config_block.inner(chunks[3]);
         f.render_widget(config_block, chunks[3]);
 
@@ -294,7 +294,7 @@ impl ModeSelectScreen {
 
         // Error / hints
         let hint_line = if let Some(ref err) = self.error_msg {
-            Line::from(Span::styled(err, Style::default().fg(theme::RED)))
+            Line::from(Span::styled(err, Style::default().fg(theme::ERROR)))
         } else {
             let hint = match self.mode {
                 SessionMode::Chat => {
@@ -304,7 +304,7 @@ impl ModeSelectScreen {
                     "Tab: cycle fields  ←/→: switch mode  Enter: launch  Esc: back"
                 }
             };
-            Line::from(Span::styled(hint, Style::default().fg(theme::DIM_GRAY)))
+            Line::from(Span::styled(hint, Style::default().fg(theme::MUTED)))
         };
         let hints = Paragraph::new(hint_line).alignment(Alignment::Center);
         f.render_widget(hints, chunks[4]);
@@ -325,9 +325,9 @@ impl ModeSelectScreen {
 
         // Prompt
         let prompt_style = if self.focus_idx == 1 {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::GRAY)
+            Style::default().fg(theme::SUBTEXT)
         };
         let prompt_val = self.prompt.value();
         let prompt_display = if prompt_val.is_empty() && self.focus_idx != 1 {
@@ -336,10 +336,10 @@ impl ModeSelectScreen {
             prompt_val
         };
         let prompt_line = Line::from(vec![
-            Span::styled("  Prompt: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Prompt: ", Style::default().fg(theme::MUTED)),
             Span::styled(prompt_display, prompt_style),
             if self.focus_idx == 1 {
-                Span::styled("▌", Style::default().fg(theme::CYAN))
+                Span::styled("▌", Style::default().fg(theme::INFO))
             } else {
                 Span::raw("")
             },
@@ -348,15 +348,15 @@ impl ModeSelectScreen {
 
         // Temperature
         let temp_style = if self.focus_idx == 2 {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::GRAY)
+            Style::default().fg(theme::SUBTEXT)
         };
         let temp_line = Line::from(vec![
-            Span::styled("  Temperature: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Temperature: ", Style::default().fg(theme::MUTED)),
             Span::styled(self.temperature.value(), temp_style),
             if self.focus_idx == 2 {
-                Span::styled("▌", Style::default().fg(theme::CYAN))
+                Span::styled("▌", Style::default().fg(theme::INFO))
             } else {
                 Span::raw("")
             },
@@ -365,34 +365,34 @@ impl ModeSelectScreen {
 
         // Swarm mode
         let mode_line = Line::from(vec![
-            Span::styled("  Mode: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Mode: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 SWARM_MODES[self.swarm_mode_idx],
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled("  (Ctrl+S to cycle)", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  (Ctrl+S to cycle)", Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(mode_line), rows[2]);
 
         // Voting mode
         let voting_line = Line::from(vec![
-            Span::styled("  Voting: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Voting: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 VOTING_MODES[self.voting_mode_idx],
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled("  (Ctrl+D to cycle)", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  (Ctrl+D to cycle)", Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(voting_line), rows[3]);
 
         // Backend
         let backend_line = Line::from(vec![
-            Span::styled("  Backend: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Backend: ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 BACKENDS[self.backend_idx],
-                Style::default().fg(theme::ACCENT),
+                Style::default().fg(theme::INFO),
             ),
-            Span::styled("  (Ctrl+B to cycle)", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  (Ctrl+B to cycle)", Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(backend_line), rows[4]);
     }
@@ -410,15 +410,15 @@ impl ModeSelectScreen {
 
         // Topic
         let topic_style = if self.focus_idx == 1 {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::GRAY)
+            Style::default().fg(theme::SUBTEXT)
         };
         let topic_line = Line::from(vec![
-            Span::styled("  Topic: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Topic: ", Style::default().fg(theme::MUTED)),
             Span::styled(self.sim_topic.value(), topic_style),
             if self.focus_idx == 1 {
-                Span::styled("▌", Style::default().fg(theme::CYAN))
+                Span::styled("▌", Style::default().fg(theme::INFO))
             } else {
                 Span::raw("")
             },
@@ -427,27 +427,27 @@ impl ModeSelectScreen {
 
         // Agents
         let agents_style = if self.focus_idx == 2 {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::GRAY)
+            Style::default().fg(theme::SUBTEXT)
         };
         let agents_line = Line::from(vec![
-            Span::styled("  Agents: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Agents: ", Style::default().fg(theme::MUTED)),
             Span::styled(format!("{}", self.sim_agents), agents_style),
-            Span::styled("  (↑/↓ to adjust, 1-10)", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  (↑/↓ to adjust, 1-10)", Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(agents_line), rows[1]);
 
         // Ticks
         let ticks_style = if self.focus_idx == 3 {
-            Style::default().fg(theme::CYAN)
+            Style::default().fg(theme::INFO)
         } else {
-            Style::default().fg(theme::GRAY)
+            Style::default().fg(theme::SUBTEXT)
         };
         let ticks_line = Line::from(vec![
-            Span::styled("  Ticks: ", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  Ticks: ", Style::default().fg(theme::MUTED)),
             Span::styled(format!("{}", self.sim_ticks), ticks_style),
-            Span::styled("  (↑/↓ to adjust)", Style::default().fg(theme::DIM_GRAY)),
+            Span::styled("  (↑/↓ to adjust)", Style::default().fg(theme::MUTED)),
         ]);
         f.render_widget(Paragraph::new(ticks_line), rows[2]);
     }

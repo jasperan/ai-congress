@@ -17,7 +17,7 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
     let block = Block::default()
         .title(scroll_label)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::CYAN));
+        .border_style(Style::default().fg(theme::INFO));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -39,14 +39,14 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
         .rev()
         .map(|entry| {
             let (icon, icon_color) = match entry.entry_type {
-                FeedEntryType::Speech => (">>", theme::ACCENT),
-                FeedEntryType::Vote => ("##", theme::GREEN),
-                FeedEntryType::System => ("**", theme::YELLOW),
-                FeedEntryType::ModelResponse => (">>", theme::ACCENT),
-                FeedEntryType::FinalAnswer => ("★★", theme::CYAN),
-                FeedEntryType::Lobby => ("$$", theme::PURPLE),
-                FeedEntryType::Filibuster => ("!!", theme::RED),
-                FeedEntryType::Amendment => ("&&", theme::CYAN),
+                FeedEntryType::Speech => (">>", theme::INFO),
+                FeedEntryType::Vote => ("##", theme::SUCCESS),
+                FeedEntryType::System => ("**", theme::WARNING),
+                FeedEntryType::ModelResponse => (">>", theme::INFO),
+                FeedEntryType::FinalAnswer => ("★★", theme::INFO),
+                FeedEntryType::Lobby => ("$$", theme::SECONDARY),
+                FeedEntryType::Filibuster => ("!!", theme::ERROR),
+                FeedEntryType::Amendment => ("&&", theme::INFO),
                 FeedEntryType::DirectAddress => ("->", theme::SECONDARY),
             };
 
@@ -54,7 +54,7 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
                 .party
                 .as_deref()
                 .map(|p| theme::party_color(p))
-                .unwrap_or(theme::GRAY);
+                .unwrap_or(theme::SUBTEXT);
 
             let max_content = (inner.width as usize).saturating_sub(20);
             let content = if entry.content.len() > max_content {
@@ -69,7 +69,7 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
             Line::from(vec![
                 Span::styled(
                     format!("[{:>3}] ", entry.tick_or_index),
-                    Style::default().fg(theme::DIM_GRAY),
+                    Style::default().fg(theme::MUTED),
                 ),
                 Span::styled(format!("{} ", icon), Style::default().fg(icon_color)),
                 Span::styled(
@@ -78,7 +78,7 @@ pub fn draw_feed(f: &mut Frame, area: Rect, entries: &[FeedEntryData], scroll: u
                         .fg(name_color)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(content, Style::default().fg(theme::GRAY)),
+                Span::styled(content, Style::default().fg(theme::SUBTEXT)),
             ])
         })
         .collect();

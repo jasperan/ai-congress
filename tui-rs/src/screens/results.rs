@@ -168,14 +168,14 @@ impl ResultsScreen {
 
     fn draw_header(&self, f: &mut Frame, area: Rect) {
         let (title, color) = match &self.result {
-            SessionResult::Chat { .. } => ("CHAT RESULTS", theme::CYAN),
+            SessionResult::Chat { .. } => ("CHAT RESULTS", theme::INFO),
             SessionResult::Simulation { result, .. } => {
                 let c = if result.to_uppercase().contains("PASSED") {
-                    theme::GREEN
+                    theme::SUCCESS
                 } else if result.to_uppercase().contains("FAILED") {
-                    theme::RED
+                    theme::ERROR
                 } else {
-                    theme::YELLOW
+                    theme::WARNING
                 };
                 ("SIMULATION RESULTS", c)
             }
@@ -194,7 +194,7 @@ impl ResultsScreen {
             ),
             Span::styled(
                 "| Esc:models  n:new session  e:export  j/k:scroll",
-                Style::default().fg(theme::DIM_GRAY),
+                Style::default().fg(theme::MUTED),
             ),
         ]);
         f.render_widget(Paragraph::new(vec![line]), inner);
@@ -252,11 +252,11 @@ impl ResultsScreen {
         let answer_block = Block::default()
             .title(" Final Answer ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::CYAN));
+            .border_style(Style::default().fg(theme::INFO));
         let answer_inner = answer_block.inner(left_rows[0]);
         f.render_widget(answer_block, left_rows[0]);
         let answer_para = Paragraph::new(final_answer)
-            .style(Style::default().fg(theme::GRAY))
+            .style(Style::default().fg(theme::SUBTEXT))
             .wrap(Wrap { trim: false })
             .scroll((self.scroll, 0));
         f.render_widget(answer_para, answer_inner);
@@ -265,7 +265,7 @@ impl ResultsScreen {
         let conf_block = Block::default()
             .title(" Confidence ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::ACCENT));
+            .border_style(Style::default().fg(theme::INFO));
         let conf_inner = conf_block.inner(left_rows[1]);
         f.render_widget(conf_block, left_rows[1]);
 
@@ -274,12 +274,12 @@ impl ResultsScreen {
         let empty = bar_width.saturating_sub(filled);
         let mut conf_lines = vec![
             Line::from(vec![
-                Span::styled("Confidence: ", Style::default().fg(theme::DIM_GRAY)),
-                Span::styled("█".repeat(filled), Style::default().fg(theme::GREEN)),
-                Span::styled("░".repeat(empty), Style::default().fg(theme::DARK_GRAY)),
+                Span::styled("Confidence: ", Style::default().fg(theme::MUTED)),
+                Span::styled("█".repeat(filled), Style::default().fg(theme::SUCCESS)),
+                Span::styled("░".repeat(empty), Style::default().fg(theme::DIM)),
                 Span::styled(
                     format!(" {:.1}%", confidence * 100.0),
-                    Style::default().fg(theme::CYAN),
+                    Style::default().fg(theme::INFO),
                 ),
             ]),
         ];
@@ -293,15 +293,15 @@ impl ResultsScreen {
                 conf_lines.push(Line::from(vec![
                     Span::styled(
                         format!("{:>14} ", model),
-                        Style::default().fg(theme::ACCENT),
+                        Style::default().fg(theme::INFO),
                     ),
                     Span::styled(
                         "█".repeat(filled_w),
-                        Style::default().fg(theme::BLUE),
+                        Style::default().fg(theme::PRIMARY),
                     ),
                     Span::styled(
                         format!(" {:.3}", w),
-                        Style::default().fg(theme::DIM_GRAY),
+                        Style::default().fg(theme::MUTED),
                     ),
                 ]));
             }
@@ -313,7 +313,7 @@ impl ResultsScreen {
         let resp_block = Block::default()
             .title(" Model Responses ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::BLUE));
+            .border_style(Style::default().fg(theme::PRIMARY));
         let resp_inner = resp_block.inner(cols[1]);
         f.render_widget(resp_block, cols[1]);
 
@@ -322,7 +322,7 @@ impl ResultsScreen {
             resp_lines.push(Line::from(Span::styled(
                 format!("[ {} ]", model),
                 Style::default()
-                    .fg(theme::CYAN)
+                    .fg(theme::INFO)
                     .add_modifier(Modifier::BOLD),
             )));
             let short = if response.len() > 200 {
@@ -334,7 +334,7 @@ impl ResultsScreen {
             for line_str in short.lines() {
                 resp_lines.push(Line::from(Span::styled(
                     line_str.to_string(),
-                    Style::default().fg(theme::GRAY),
+                    Style::default().fg(theme::SUBTEXT),
                 )));
             }
             resp_lines.push(Line::from(""));
@@ -367,11 +367,11 @@ impl ResultsScreen {
 
         // Result banner
         let banner_color = if result.to_uppercase().contains("PASSED") {
-            theme::GREEN
+            theme::SUCCESS
         } else if result.to_uppercase().contains("FAILED") {
-            theme::RED
+            theme::ERROR
         } else {
-            theme::YELLOW
+            theme::WARNING
         };
 
         let banner_block = Block::default()
@@ -388,30 +388,30 @@ impl ResultsScreen {
                     .add_modifier(Modifier::BOLD),
             )),
             Line::from(vec![
-                Span::styled("YEA: ", Style::default().fg(theme::DIM_GRAY)),
+                Span::styled("YEA: ", Style::default().fg(theme::MUTED)),
                 Span::styled(
                     format!("{}", yea),
-                    Style::default().fg(theme::GREEN).add_modifier(Modifier::BOLD),
+                    Style::default().fg(theme::SUCCESS).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  NAY: ", Style::default().fg(theme::DIM_GRAY)),
+                Span::styled("  NAY: ", Style::default().fg(theme::MUTED)),
                 Span::styled(
                     format!("{}", nay),
-                    Style::default().fg(theme::RED).add_modifier(Modifier::BOLD),
+                    Style::default().fg(theme::ERROR).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  ABSTAIN: ", Style::default().fg(theme::DIM_GRAY)),
+                Span::styled("  ABSTAIN: ", Style::default().fg(theme::MUTED)),
                 Span::styled(
                     format!("{}", abstain),
-                    Style::default().fg(theme::YELLOW),
+                    Style::default().fg(theme::WARNING),
                 ),
             ]),
         ];
 
         if let Some(acc) = historical_accuracy {
             banner_lines.push(Line::from(vec![
-                Span::styled("Historical Accuracy: ", Style::default().fg(theme::DIM_GRAY)),
+                Span::styled("Historical Accuracy: ", Style::default().fg(theme::MUTED)),
                 Span::styled(
                     format!("{:.1}%", acc * 100.0),
-                    Style::default().fg(theme::ACCENT),
+                    Style::default().fg(theme::INFO),
                 ),
             ]));
         }
@@ -423,7 +423,7 @@ impl ResultsScreen {
             let amend_block = Block::default()
                 .title(" Amendment Outcomes ")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::CYAN));
+                .border_style(Style::default().fg(theme::INFO));
             let amend_inner = amend_block.inner(rows[1]);
             f.render_widget(amend_block, rows[1]);
 
@@ -438,11 +438,11 @@ impl ResultsScreen {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
                 let status_color = if status.to_uppercase().contains("PASS") {
-                    theme::GREEN
+                    theme::SUCCESS
                 } else if status.to_uppercase().contains("FAIL") {
-                    theme::RED
+                    theme::ERROR
                 } else {
-                    theme::YELLOW
+                    theme::WARNING
                 };
                 let ay = amendment.get("yea").and_then(|v| v.as_u64()).unwrap_or(0);
                 let an = amendment.get("nay").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -450,7 +450,7 @@ impl ResultsScreen {
                 amend_lines.push(Line::from(vec![
                     Span::styled(
                         format!("A{}: ", i + 1),
-                        Style::default().fg(theme::ACCENT),
+                        Style::default().fg(theme::INFO),
                     ),
                     Span::styled(
                         format!("{} ", status.to_uppercase()),
@@ -458,9 +458,9 @@ impl ResultsScreen {
                     ),
                     Span::styled(
                         format!("({}/{}) ", ay, an),
-                        Style::default().fg(theme::DIM_GRAY),
+                        Style::default().fg(theme::MUTED),
                     ),
-                    Span::styled(text.to_string(), Style::default().fg(theme::GRAY)),
+                    Span::styled(text.to_string(), Style::default().fg(theme::SUBTEXT)),
                 ]));
             }
 
@@ -479,9 +479,9 @@ impl ResultsScreen {
             .clone()
             .unwrap_or_else(|| "Esc:models  n:new  e:export  j/k:scroll".to_string());
         let color = if self.export_message.is_some() {
-            theme::GREEN
+            theme::SUCCESS
         } else {
-            theme::DIM_GRAY
+            theme::MUTED
         };
         let line = Line::from(Span::styled(msg, Style::default().fg(color)));
         f.render_widget(Paragraph::new(vec![line]), area);
