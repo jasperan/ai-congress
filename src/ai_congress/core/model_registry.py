@@ -29,14 +29,18 @@ class ModelRegistry:
             models = []
 
             for model in models_response:
+                # ollama>=0.6 dumps the id under 'model' (no computed 'name')
+                model_name = model.get('name') or model.get('model')
+                if not model_name:
+                    continue
                 model_info = {
-                    'name': model['name'],
+                    'name': model_name,
                     'size': model.get('size', 0),
                     'modified_at': model.get('modified_at'),
                     'digest': model.get('digest')
                 }
                 models.append(model_info)
-                self.models_cache[model['name']] = model_info
+                self.models_cache[model_name] = model_info
 
             logger.info(f"Found {len(models)} available models")
             return models

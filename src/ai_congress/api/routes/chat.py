@@ -199,6 +199,7 @@ async def enhanced_chat(request: EnhancedChatRequest):
 
     try:
         orch = get_enhanced_orchestrator()
+        orch.inference_backend = request.inference_backend
 
         # Wire RAG engine if requested
         if request.use_rag or request.document_ids:

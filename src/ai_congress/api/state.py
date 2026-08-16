@@ -32,6 +32,7 @@ voting_engine = VotingEngine()
 swarm = SwarmOrchestrator(
     model_registry, voting_engine, config.ollama,
     openai_config=config.openai,
+    pi_config=config.pi,
 )
 
 # Data lake (Oracle 26ai Free) — config-driven
@@ -69,6 +70,8 @@ def get_enhanced_orchestrator() -> EnhancedOrchestrator:
             voting_engine=voting_engine,
             ollama_client=swarm.ollama_client,
             personality_loader=personality_loader,
+            pi_client=swarm.pi_client,
+            inference_backend=swarm.inference_backend,
         )
 
         # Wire precedent store if Oracle is available
@@ -100,6 +103,25 @@ def default_models() -> List[str]:
     if pref:
         return list(pref)
     return ["qwen3.5:9b"]
+
+
+def pi_models() -> List[dict]:
+    """Models exposed by the pi backend (deepseek-v4-flash via opencode-go).
+
+    Returns [{name, size, weight, backend: "pi"}] when the pi backend is
+    enabled (API key present). Sizes are unknown for remote models (0).
+    """
+    if not config.pi.enabled:
+        return []
+    return [
+        {
+            "name": m,
+            "size": 0,
+            "weight": model_registry.get_model_weight(m),
+            "backend": "pi",
+        }
+        for m in config.pi.preferred_models
+    ]
 
 
 async def load_personalities() -> List[dict]:

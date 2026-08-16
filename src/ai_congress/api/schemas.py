@@ -32,7 +32,7 @@ class ChatRequest(BaseModel):
     search_web: bool = False  # Enable web search
     document_ids: Optional[List[str]] = None  # Specific documents for RAG
     voting_mode: str = "classic"  # classic | semantic
-    inference_backend: str = "ollama"  # ollama | openai
+    inference_backend: str = "ollama"  # ollama | pi | openai
 
 
 class EnhancedChatRequest(BaseModel):
@@ -44,6 +44,7 @@ class EnhancedChatRequest(BaseModel):
     use_rag: bool = False
     document_ids: Optional[List[str]] = None
     search_web: bool = False
+    inference_backend: str = "ollama"  # ollama | pi | openai
 
 
 class FeedbackRequest(BaseModel):

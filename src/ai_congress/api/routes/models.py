@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 
 from ..schemas import ModelInfo
-from ..state import config, model_registry, swarm
+from ..state import config, model_registry, pi_models, swarm
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,9 @@ async def list_models():
         )
         for m in models
     ]
+
+    # pi backend models (deepseek-v4-flash via opencode-go)
+    result.extend(ModelInfo(**pm) for pm in pi_models())
 
     # Include OpenAI model if configured
     if swarm.openai_client is not None:

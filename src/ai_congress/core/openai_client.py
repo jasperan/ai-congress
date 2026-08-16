@@ -25,6 +25,7 @@ class OpenAIClient:
         model: str = "gpt-5.4",
         timeout: int = 120,
         max_retries: int = 3,
+        max_tokens: int = 4096,
     ):
         from openai import AsyncOpenAI
 
@@ -32,6 +33,7 @@ class OpenAIClient:
         self.model = model
         self.timeout = timeout
         self.max_retries = max_retries
+        self.max_tokens = max_tokens
 
         self.client = AsyncOpenAI(
             base_url=self.base_url,
@@ -49,6 +51,10 @@ class OpenAIClient:
         """Send chat request, matching OllamaClient.chat signature."""
         options = options or {}
         temperature = options.get("temperature", 0.7)
+        # Reasoning models (deepseek-v4-flash) share one completion budget
+        # between thinking and answer — cap it so a runaway chain-of-thought
+        # cannot burn unbounded tokens/latency.
+        max_tokens = int(options.get("max_tokens", self.max_tokens))
         last_error = None
 
         for attempt in range(1, self.max_retries + 1):
@@ -64,15 +70,20 @@ class OpenAIClient:
                 )
 
                 if stream:
-                    return self._stream_generator(model, messages, temperature)
+                    return self._stream_generator(model, messages, temperature, max_tokens)
 
                 response = await self.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=temperature,
+                    max_tokens=max_tokens,
                 )
 
-                content = response.choices[0].message.content or ""
+                message = response.choices[0].message
+                content = message.content or ""
+                # DeepSeek-style reasoning models return their chain-of-thought
+                # in message.reasoning_content (opencode-go / deepseek-v4-flash).
+                reasoning = getattr(message, "reasoning_content", None) or ""
                 debug_action(
                     "OPENAI_RESPONSE",
                     model,
@@ -81,7 +92,10 @@ class OpenAIClient:
                 )
 
                 # Return in Ollama-compatible dict shape
-                return {"message": {"content": content}}
+                result = {"message": {"content": content}}
+                if reasoning:
+                    result["message"]["reasoning"] = reasoning
+                return result
 
             except Exception as e:
                 last_error = e
@@ -101,20 +115,29 @@ class OpenAIClient:
 
         return {"message": {"content": ""}, "error": str(last_error)}
 
-    async def _stream_generator(self, model, messages, temperature):
+    async def _stream_generator(self, model, messages, temperature, max_tokens=None):
         """Return an async generator that yields Ollama-shaped chunks."""
         stream = await self.client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
+            max_tokens=max_tokens or self.max_tokens,
             stream=True,
         )
 
         async def _chunks():
             async for chunk in stream:
+                if not chunk.choices:
+                    continue
                 delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    yield {"message": {"content": delta.content}}
+                if delta:
+                    content = getattr(delta, "content", None)
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if content:
+                        yield {"message": {"content": content}}
+                    elif reasoning:
+                        # DeepSeek-style reasoning tokens; surface as reasoning
+                        yield {"message": {"content": "", "reasoning": reasoning}}
 
         return _chunks()
 

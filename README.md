@@ -307,6 +307,30 @@ Plus: Performance profiling, debate replay, chunk-level attribution, minority re
 
 ## Configuration
 
+### Inference backends
+
+AI Congress can run against **local Ollama** and/or **cloud backends** — both
+are available side by side and selected per request:
+
+| Backend | Models | How to enable |
+|---|---|---|
+| `ollama` (default) | Local models (qwen3.5:9b, gemma3:4b, ...) | Just run `ollama serve` |
+| `pi` | deepseek-v4-flash / deepseek-v4-pro via opencode-go (cloud) | Set `OPENCODE_GO_API_KEY` (and optionally `PI_BASE_URL` / `PI_MODEL`) |
+| `openai` | Any OpenAI-compatible endpoint (OCA / LiteLLM / OpenAI) | Set `OPENAI_BASE_URL` + `OPENAI_API_KEY` |
+
+Select the backend via `inference_backend` in API/WS requests, `--backend pi`
+in the CLI, or the interactive backend picker:
+
+```bash
+./run_cli.py chat "Explain transformers" --backend pi -m deepseek-v4-flash
+```
+
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Explain transformers", "models": ["deepseek-v4-flash"], "inference_backend": "pi"}'
+```
+
 All configuration in `config/config.yaml`:
 
 ```yaml

@@ -13,7 +13,15 @@ class VotingEngine:
 
     MAX_HISTORY = 1000
 
-    def __init__(self):
+    def __init__(self, semantic_grouping: bool = True):
+        """
+        Args:
+            semantic_grouping: When True (default), responses that mean the
+                same thing but are worded differently pool their weight
+                (embedding similarity with lexical fallback). When False,
+                only exact normalized-string matches pool.
+        """
+        self.semantic_grouping = semantic_grouping
         self.voting_history = []
 
     def weighted_majority_vote(
@@ -36,29 +44,61 @@ class VotingEngine:
         if len(responses) != len(weights):
             raise ValueError("Responses and weights must have same length")
 
-        # Group responses and sum weights
+        # Group responses and sum weights. When semantic grouping is enabled,
+        # paraphrases pool their weight instead of splitting the vote.
         response_weights = {}
         vote_details = {}
 
-        for i, response in enumerate(responses):
-            # Normalize response for comparison
-            normalized = response.strip().lower()
-
-            if normalized not in response_weights:
-                response_weights[normalized] = 0
-                vote_details[normalized] = {
-                    'original': response,
+        def _add(normalized_key: str, original: str, weight: float, model: str) -> None:
+            if normalized_key not in response_weights:
+                response_weights[normalized_key] = 0
+                vote_details[normalized_key] = {
+                    'original': original,
+                    'original_weight': weight,
                     'weight': 0,
                     'votes': [],
-                    'models': []
+                    'models': [],
                 }
+            response_weights[normalized_key] += weight
+            vote_details[normalized_key]['weight'] += weight
+            vote_details[normalized_key]['votes'].append(weight)
+            # Representative = highest-weight member (best winner text)
+            if weight > vote_details[normalized_key].get('original_weight', 0.0):
+                vote_details[normalized_key]['original'] = original
+                vote_details[normalized_key]['original_weight'] = weight
+            if model:
+                vote_details[normalized_key]['models'].append(model)
 
-            response_weights[normalized] += weights[i]
-            vote_details[normalized]['weight'] += weights[i]
-            vote_details[normalized]['votes'].append(weights[i])
-
-            if model_names and i < len(model_names):
-                vote_details[normalized]['models'].append(model_names[i])
+        if self.semantic_grouping and len(responses) > 1:
+            # Semantic keys: first index of each similarity group serves as
+            # the canonical key for every member of that group. The threshold
+            # is adaptive: embeddings can catch loose paraphrases; the lexical
+            # fallback needs a much lower bar to pool anything at all.
+            from ..utils.semantic import embedding_available, text_similarity
+            similarity_threshold = 0.72 if embedding_available() else 0.35
+            keys: list[str] = []
+            for i, response in enumerate(responses):
+                canonical = (response or "").strip().lower()
+                for j in range(i):
+                    if text_similarity(responses[i], responses[j]) >= similarity_threshold:
+                        canonical = keys[j]
+                        break
+                keys.append(canonical)
+                _add(
+                    canonical,
+                    responses[i],
+                    weights[i],
+                    model_names[i] if model_names and i < len(model_names) else "",
+                )
+        else:
+            for i, response in enumerate(responses):
+                normalized = (response or "").strip().lower()
+                _add(
+                    normalized,
+                    response,
+                    weights[i],
+                    model_names[i] if model_names and i < len(model_names) else "",
+                )
 
         # Find winner
         winner = max(response_weights.items(), key=lambda x: x[1])

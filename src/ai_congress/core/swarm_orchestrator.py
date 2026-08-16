@@ -16,7 +16,7 @@ from .deliberation import (
 )
 from .ollama_client import OllamaClient
 from .openai_client import OpenAIClient
-from ..utils.config_loader import OllamaConfig, OpenAIConfig, load_config
+from ..utils.config_loader import OllamaConfig, OpenAIConfig, PiBackendConfig, load_config
 from ..utils.logger import debug_action, info_message, swarm_status_panel, truncate_text, error_message
 from .acp.registry import AgentRegistry
 from .acp.coordination import CoordinationController
@@ -40,6 +40,7 @@ class SwarmOrchestrator:
         ollama_config: OllamaConfig,
         coordination_level: str = "moderate",
         openai_config: Optional[OpenAIConfig] = None,
+        pi_config: Optional[PiBackendConfig] = None,
         inference_backend: str = "ollama",
     ):
         self.model_registry = model_registry
@@ -58,7 +59,17 @@ class SwarmOrchestrator:
                 timeout=openai_config.timeout,
                 max_retries=openai_config.max_retries,
             )
-        self.inference_backend = inference_backend  # "ollama" or "openai"
+        # pi backend: deepseek-v4-flash (and friends) via opencode-go
+        self.pi_client: Optional[OpenAIClient] = None
+        if pi_config and pi_config.enabled:
+            self.pi_client = OpenAIClient(
+                base_url=pi_config.base_url,
+                api_key=pi_config.api_key,
+                model=pi_config.model,
+                timeout=pi_config.timeout,
+                max_retries=pi_config.max_retries,
+            )
+        self.inference_backend = inference_backend  # "ollama" | "openai" | "pi"
         self.max_concurrent = 10
 
         # ACP components
@@ -222,16 +233,24 @@ Assess how semantically similar/agreeing they are overall. Ignore phrasing diffe
 Output only a confidence score from 0.0 (no agreement, completely different meanings) to 1.0 (full agreement, same meaning). Just the number, nothing else."""
 
         try:
-            # Query phi3 for confidence score
-            # Use the highest-weighted available model as summarizer
-            top_models = self.model_registry.get_top_models(n=1)
-            summarizer_model = top_models[0] if top_models else config.voting.summarizer_model
+            # Query the summarizer via the ACTIVE inference backend, so pi /
+            # openai runs don't silently fall back to local Ollama.
+            if self.inference_backend == "pi" and self.pi_client is not None:
+                client = self.pi_client
+                summarizer_model = self.pi_client.model
+            elif self.inference_backend == "openai" and self.openai_client is not None:
+                client = self.openai_client
+                summarizer_model = self.openai_client.model
+            else:
+                client = self.ollama_client
+                top_models = self.model_registry.get_top_models(n=1)
+                summarizer_model = top_models[0] if top_models else config.voting.summarizer_model
             messages = [{'role': 'user', 'content': prompt}]
 
-            response = await self.ollama_client.chat(
+            response = await client.chat(
                 model=summarizer_model,
                 messages=messages,
-                options={'temperature': 0.1}  # Low temperature for consistent scoring
+                options={'temperature': 0.1, 'max_tokens': 128},  # Low temp for consistent scoring
             )
 
             content = response['message']['content'].strip()
@@ -313,18 +332,24 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                 messages.append({'role': 'user', 'content': prompt})
 
             # Pick the right client based on inference backend
-            use_openai = (
-                self.inference_backend == "openai"
-                and self.openai_client is not None
-            )
-            client = self.openai_client if use_openai else self.ollama_client
-            # For OpenAI backend, override model_name with the configured model
-            effective_model = (
-                self.openai_client.model if use_openai else model_name
-            )
+            #   "ollama" -> local Ollama client (model name as-is)
+            #   "openai" -> OpenAI-compatible client (configured model)
+            #   "pi"     -> pi backend client (deepseek-v4-flash via opencode-go)
+            if self.inference_backend == "pi" and self.pi_client is not None:
+                client = self.pi_client
+                effective_model = self.pi_client.model
+                backend_label = "pi"
+            elif self.inference_backend == "openai" and self.openai_client is not None:
+                client = self.openai_client
+                effective_model = self.openai_client.model
+                backend_label = "openai"
+            else:
+                client = self.ollama_client
+                effective_model = model_name
+                backend_label = "ollama"
 
             logger.debug(
-                f"Querying {effective_model} via {'openai' if use_openai else 'ollama'} "
+                f"Querying {effective_model} via {backend_label} "
                 f"with temperature {temperature}"
             )
 
@@ -349,7 +374,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     'response': response_text,
                     'temperature': temperature,
                     'success': True,
-                    'backend': 'openai' if use_openai else 'ollama',
+                    'backend': backend_label,
                 }
             else:
                 if update_callback:
@@ -373,14 +398,14 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                         'temperature': temperature,
                         'success': False,
                         'error': response.get('error', 'empty response'),
-                        'backend': 'openai' if use_openai else 'ollama',
+                        'backend': backend_label,
                     }
                 return {
                     'model': model_name,
                     'response': content,
                     'temperature': temperature,
                     'success': True,
-                    'backend': 'openai' if use_openai else 'ollama',
+                    'backend': backend_label,
                 }
 
         except Exception as e:

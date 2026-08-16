@@ -5,6 +5,10 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **pi inference backend**: run the congress against `deepseek-v4-flash` (and other cloud models) via opencode-go alongside local Ollama — selectable per request via `inference_backend: pi | ollama | openai` (API/WS/CLI). Enabled by setting `OPENCODE_GO_API_KEY`.
+- `PiBackendConfig` in the config loader with env overrides (`PI_BASE_URL`, `PI_MODEL`); env overrides now apply even when `config.yaml` is absent.
+- OpenAI client: `max_tokens` cap (unbounded reasoning budgets on DeepSeek-style models no longer stall) + `reasoning_content` capture for reasoning models.
+- Backend-aware summarizer selection in `semantic_confidence` (pi/openai runs no longer fall back to local Ollama for scoring).
 - Backend CI workflow (`.github/workflows/backend.yml`): lint/compile check + hermetic unit suite on Python 3.10–3.12.
 - `.env.example` documenting all optional environment configuration (Oracle datalake, CORS, API key, voice, search).
 - `.dockerignore`, compose healthcheck, and standardized API port (8000 everywhere).
@@ -24,6 +28,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Test collection error caused by hard `duckduckgo_search` / `faster_whisper` imports.
 - `adaptive_chunking` test assertion inconsistent with the code default.
+- Model listing with ollama>=0.6 (pydantic model dumps carry `model`, not `name`).
 
 ## [0.2.0] - previous
 - See git history (`git log`) for the pre-changelog period.

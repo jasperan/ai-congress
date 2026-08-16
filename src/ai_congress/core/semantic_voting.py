@@ -7,6 +7,7 @@ models phrase answers differently.
 """
 
 import json
+import random
 import re
 import logging
 from dataclasses import dataclass, asdict
@@ -58,7 +59,14 @@ Group these responses by their semantic meaning — responses that reach the sam
 conclusion with the same core reasoning go in the same group. Ignore phrasing
 differences (e.g., "4" and "four" are the same, "great" and "excellent" are the same).
 
-Responses:
+Evaluation rubric (apply it carefully):
+1. Base grouping on the substance of each answer (claims, reasoning, conclusion).
+2. Do NOT let response length influence your grouping — a short answer and a long
+   answer that agree are the same group.
+3. Do NOT assume later responses are more important; evaluate each on its own.
+4. When responses conflict, keep them in separate groups — do not merge to look tidy.
+
+Responses (order is arbitrary and carries no significance):
 {responses}
 
 Output ONLY valid JSON with this structure (no markdown, no explanation):
@@ -88,9 +96,15 @@ class SemanticVotingEngine:
         """
         judge_model = self._select_judge(responses)
 
+        # Shuffle presentation order to counter position bias (judge sees
+        # the responses in random order every call; labels are preserved).
+        ordered = list(responses)
+        rng = random.Random()  # no fixed seed: per-call randomness
+        rng.shuffle(ordered)
+
         # Build the responses text block
         responses_text = "\n".join(
-            f'[{r.model_name}]: "{r.response_text}"' for r in responses
+            f'[{r.model_name}]: "{r.response_text}"' for r in ordered
         )
         prompt = JUDGE_PROMPT_TEMPLATE.format(responses=responses_text)
 

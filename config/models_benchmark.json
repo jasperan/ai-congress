@@ -30,8 +30,8 @@
     "description": "Strong reasoning"
   },
   "codellama:13b": {
-    "accuracy": 0.80,
-    "mmlu": 0.80,
+    "accuracy": 0.8,
+    "mmlu": 0.8,
     "description": "Code generation"
   },
   "vicuna:13b": {
@@ -143,5 +143,15 @@
     "accuracy": 0.91,
     "mmlu": 0.91,
     "description": "Large safety reasoning model with enhanced safeguards"
+  },
+  "deepseek-v4-flash": {
+    "accuracy": 0.82,
+    "mmlu": 0.82,
+    "description": "DeepSeek V4 Flash (cloud, via pi/opencode-go) \u2014 fast reasoning"
+  },
+  "deepseek-v4-pro": {
+    "accuracy": 0.88,
+    "mmlu": 0.88,
+    "description": "DeepSeek V4 Pro (cloud, via pi/opencode-go) \u2014 strongest reasoning"
   }
 }

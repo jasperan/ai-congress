@@ -219,6 +219,7 @@ def chat(
     stream: bool = typer.Option(False, "--stream", "-s", help="Stream responses in real-time"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     reasoning: Optional[str] = typer.Option(None, "--reasoning", "-r", help="Reasoning mode: cot, react"),
+    backend: str = typer.Option("ollama", "--backend", "-b", help="Inference backend: ollama, pi, openai"),
     triad: Optional[str] = typer.Option(None, "--triad", help="Run a 3-member deliberation. Use --triad list to see available names"),
 ):
     """Interactive chat with LLM swarm"""
@@ -229,7 +230,7 @@ def chat(
             info = describe_triad(name)
             console.print(f"  [pi.dim]{name}[/pi.dim]: {info['description']}")
         return
-    asyncio.run(run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, triad=triad))
+    asyncio.run(run_chat_logic(prompt, models, mode, temperature, stream, verbose, personalities, reasoning, inference_backend=backend, triad=triad))
 
 
 @app.command()
@@ -275,6 +276,16 @@ def models():
                     "openai",
                     "N/A",
                     "N/A",
+                )
+
+            # Show pi backend models (deepseek-v4-flash via opencode-go)
+            if config.pi.enabled:
+                table.add_row(config.pi.model, "pi", "N/A", "N/A")
+                table.add_row(
+                    f"{len(config.pi.preferred_models)} pi models available",
+                    "pi",
+                    "cloud",
+                    "cloud",
                 )
 
             console.print(table)
@@ -348,10 +359,14 @@ def interactive_menu():
             dynamic_border(console, "new chat", style="pi.border")
             prompt = Prompt.ask(f"\n[{PI_COLORS['green']}]Enter your prompt[/]")
 
-            # Inference backend selection
+            # Inference backend selection: local Ollama, pi (deepseek-v4-flash
+            # via opencode-go), or a generic OpenAI-compatible endpoint.
             backend_choices = [
                 questionary.Choice("Ollama (local models, default)", value="ollama"),
             ]
+            if config.pi.enabled:
+                pi_label = f"pi (opencode-go: {config.pi.model})"
+                backend_choices.append(questionary.Choice(pi_label, value="pi"))
             if swarm.openai_client is not None:
                 openai_label = f"OpenAI-compatible ({config.openai.model or 'remote'})"
                 backend_choices.append(
@@ -376,13 +391,20 @@ def interactive_menu():
             if inference_backend == "openai":
                 openai_model = config.openai.model or "gpt"
                 models_list = [f"{openai_model}:agent-1", f"{openai_model}:agent-2"]
+            elif inference_backend == "pi":
+                # pi backend: the configured deepseek model is used for every
+                # "agent" slot (distinct labels, same remote model).
+                models_list = [f"{config.pi.model}:agent-1", f"{config.pi.model}:agent-2"]
             else:
                 models_list = _default_models()
             if mode == "multi_model":
                  # Maybe ask for models?
                  pass
 
-            backend_label = f"{'openai' if inference_backend == 'openai' else 'ollama'}"
+            backend_label = {
+                "openai": "openai",
+                "pi": f"pi ({config.pi.model})",
+            }.get(inference_backend, "ollama")
             console.print(f"[pi.dim]Running swarm in {mode} mode via {backend_label}...[/pi.dim]")
             dynamic_border(console, "swarm executing", style="pi.border.dim")
 

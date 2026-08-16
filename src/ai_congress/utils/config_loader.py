@@ -25,6 +25,28 @@ class OpenAIConfig(BaseModel):
     max_retries: int = 3
 
 
+class PiBackendConfig(BaseModel):
+    """Config for the pi backend (deepseek-v4-flash via opencode-go).
+
+    The pi backend is an OpenAI-compatible endpoint that hosts DeepSeek
+    V4 Flash / Pro (and other cloud models). It runs alongside local
+    Ollama — pick per request via ``inference_backend: pi | ollama``.
+    """
+    base_url: str = "https://opencode.ai/zen/go/v1"
+    api_key: str = ""
+    model: str = "deepseek-v4-flash"
+    preferred_models: list = Field(
+        default_factory=lambda: ["deepseek-v4-flash", "deepseek-v4-pro"]
+    )
+    timeout: int = 120
+    max_retries: int = 3
+
+    @property
+    def enabled(self) -> bool:
+        """The pi backend is usable when we have an API key."""
+        return bool(self.api_key)
+
+
 class SwarmConfig(BaseModel):
     default_mode: str = "multi_model"
     multi_request: Dict[str, Any] = Field(default_factory=lambda: {"temperatures": [0.3, 0.7, 1.0, 1.2]})
@@ -173,6 +195,7 @@ class ImageGenConfig(BaseModel):
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    pi: PiBackendConfig = Field(default_factory=PiBackendConfig)
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
     voting: VotingConfig = Field(default_factory=VotingConfig)
     deliberation: DeliberationConfigModel = Field(default_factory=DeliberationConfigModel)
@@ -243,34 +266,51 @@ def _apply_codex_config(config: Config) -> None:
         logger.debug(f"Could not read codex config: {e}")
 
 
+def _apply_env_overrides(config: Config) -> Config:
+    """Apply env-var overrides on top of YAML/default config.
+
+    Called in both the config-file and no-config paths so environment
+    overrides (Ollama URL, pi/opencode-go key, OpenAI) always take effect.
+    """
+    if os.getenv("OLLAMA_BASE_URL"):
+        config.ollama.base_url = os.getenv("OLLAMA_BASE_URL")
+        logger.info(f"OLLAMA_BASE_URL override applied: {config.ollama.base_url}")
+
+    # Auto-populate OpenAI config from ~/.codex/config.toml if not set in YAML
+    if not config.openai.base_url:
+        _apply_codex_config(config)
+
+    # Env-var overrides for OpenAI
+    if os.getenv("OPENAI_BASE_URL"):
+        config.openai.base_url = os.getenv("OPENAI_BASE_URL")
+    if os.getenv("OPENAI_API_KEY"):
+        config.openai.api_key = os.getenv("OPENAI_API_KEY")
+    if os.getenv("OPENAI_MODEL"):
+        config.openai.model = os.getenv("OPENAI_MODEL")
+
+    # Env-var overrides for the pi backend (opencode-go / deepseek-v4-flash)
+    if os.getenv("OPENCODE_GO_API_KEY") or os.getenv("PI_API_KEY"):
+        config.pi.api_key = os.getenv("OPENCODE_GO_API_KEY") or os.getenv("PI_API_KEY")
+    if os.getenv("PI_BASE_URL"):
+        config.pi.base_url = os.getenv("PI_BASE_URL")
+    if os.getenv("PI_MODEL"):
+        config.pi.model = os.getenv("PI_MODEL")
+
+    return config
+
+
 def load_config(config_file: str = "config/config.yaml") -> Config:
-    """Load configuration from YAML file"""
+    """Load configuration from YAML file, then apply env overrides."""
     try:
         if not os.path.exists(config_file):
             logger.warning(f"Config file {config_file} not found, using defaults")
-            return Config()
+            return _apply_env_overrides(Config())
 
         with open(config_file, 'r') as f:
             config_data = yaml.safe_load(f)
 
         config = Config(**config_data)
-
-        # Environment variable overrides
-        if os.getenv("OLLAMA_BASE_URL"):
-            config.ollama.base_url = os.getenv("OLLAMA_BASE_URL")
-            logger.info(f"OLLAMA_BASE_URL override applied: {config.ollama.base_url}")
-
-        # Auto-populate OpenAI config from ~/.codex/config.toml if not set in YAML
-        if not config.openai.base_url:
-            _apply_codex_config(config)
-
-        # Env-var overrides for OpenAI
-        if os.getenv("OPENAI_BASE_URL"):
-            config.openai.base_url = os.getenv("OPENAI_BASE_URL")
-        if os.getenv("OPENAI_API_KEY"):
-            config.openai.api_key = os.getenv("OPENAI_API_KEY")
-        if os.getenv("OPENAI_MODEL"):
-            config.openai.model = os.getenv("OPENAI_MODEL")
+        config = _apply_env_overrides(config)
 
         logger.info(f"Loaded configuration from {config_file}")
         return config

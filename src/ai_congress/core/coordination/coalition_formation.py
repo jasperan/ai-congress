@@ -68,7 +68,7 @@ class CoalitionFormation:
         return coalitions
 
     def compute_similarity(self, text1: str, text2: str) -> float:
-        """Compute word-overlap similarity (Jaccard index) between two texts.
+        """Semantic similarity (embedding with lexical fallback).
 
         Args:
             text1: First text.
@@ -77,14 +77,8 @@ class CoalitionFormation:
         Returns:
             Similarity score between 0.0 and 1.0.
         """
-        words1 = set(text1.lower().split())
-        words2 = set(text2.lower().split())
-        if not words1 and not words2:
-            return 1.0
-        union = words1 | words2
-        if not union:
-            return 0.0
-        return len(words1 & words2) / len(union)
+        from ...utils.semantic import text_similarity
+        return text_similarity(text1, text2)
 
     def select_representative(self, coalition: dict) -> str:
         """Select the response from the highest-weighted coalition member.

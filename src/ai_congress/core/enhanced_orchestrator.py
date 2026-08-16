@@ -100,10 +100,14 @@ class EnhancedOrchestrator:
         coordination_level: str = "moderate",
         rag_engine=None,
         web_search_engine=None,
+        pi_client=None,
+        inference_backend: str = "ollama",
     ):
         self.model_registry = model_registry
         self.voting_engine = voting_engine
         self.ollama_client = ollama_client
+        self.pi_client = pi_client
+        self.inference_backend = inference_backend  # "ollama" | "openai" | "pi"
         self.personality_loader = personality_loader
         self.rag_engine = rag_engine
         self.web_search_engine = web_search_engine
@@ -247,18 +251,35 @@ class EnhancedOrchestrator:
 
             messages.append({"role": "user", "content": prompt})
 
+            # Route through the configured inference backend. pi backend
+            # (deepseek-v4-flash via opencode-go) uses its own remote model id.
+            if self.inference_backend == "pi" and self.pi_client is not None:
+                client, effective_model = self.pi_client, self.pi_client.model
+            else:
+                client, effective_model = self.ollama_client, model_name
+
             response = await asyncio.wait_for(
-                self.ollama_client.chat(
-                    model=model_name,
+                client.chat(
+                    model=effective_model,
                     messages=messages,
                     options={"temperature": temperature},
                 ),
                 timeout=timeout,
             )
+            content = (response.get("message") or {}).get("content", "")
+            if response.get("error") or not content.strip():
+                return {
+                    "model": model_name,
+                    "response": "",
+                    "temperature": temperature,
+                    "success": False,
+                    "error": response.get("error", "empty response"),
+                    "latency_ms": (time.time() - start_time) * 1000.0,
+                }
             latency_ms = (time.time() - start_time) * 1000.0
             return {
                 "model": model_name,
-                "response": response["message"]["content"],
+                "response": content,
                 "temperature": temperature,
                 "success": True,
                 "latency_ms": latency_ms,
@@ -294,6 +315,21 @@ class EnhancedOrchestrator:
                 model, stats["current_limit"], stats["vram_usage_pct"],
             )
             return await self._query_model(model, prompt, temperature, **kwargs)
+
+    def _is_winner_response(self, response_text: str, winner: str) -> bool:
+        """Whether a response semantically matches the winner text.
+
+        The ensemble may pool paraphrases under one winner; a model "voted
+        for the winner" when its response is semantically similar rather than
+        byte-identical.
+        """
+        if not response_text or not winner:
+            return response_text == winner
+        try:
+            from ..utils.semantic import text_similarity
+            return text_similarity(response_text, winner) >= 0.75
+        except Exception:
+            return response_text.strip().lower() == winner.strip().lower()
 
     async def enhanced_swarm(
         self,
@@ -623,7 +659,7 @@ class EnhancedOrchestrator:
             if winner and final_models:
                 winning_model = None
                 for r in revised_responses:
-                    if r["response"] == winner:
+                    if self._is_winner_response(r.get("response", ""), winner):
                         winning_model = r["model"]
                         break
                 if winning_model:
@@ -690,7 +726,7 @@ class EnhancedOrchestrator:
         try:
             for model in final_models:
                 is_winner = any(
-                    r["model"] == model and r["response"] == winner
+                    r["model"] == model and self._is_winner_response(r.get("response", ""), winner)
                     for r in revised_responses
                 )
                 self.dynamic_weight_manager.record_outcome(model, was_winner=is_winner)
@@ -706,7 +742,7 @@ class EnhancedOrchestrator:
         try:
             personalities = [profiles.get(m, PersonalityProfile()) for m in final_models]
             for profile_obj, resp in zip(personalities, final_texts):
-                agreed = resp.strip().lower() == winner.strip().lower()
+                agreed = self._is_winner_response(resp, winner)
                 self.emotional_voting.apply_emotional_drift(profile_obj, agent_agreed_with_majority=agreed)
         except Exception as e:
             logger.warning("Emotional drift application failed: %s", e)

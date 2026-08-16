@@ -26,7 +26,17 @@ class OllamaClient:
         """List available models"""
         try:
             response = await self.client.list()
-            return response.get('models', [])
+            models = response.get('models', [])
+            # ollama>=0.6 returns pydantic Model objects; normalize to dicts
+            normalized = []
+            for m in models:
+                if hasattr(m, "model_dump"):
+                    normalized.append(m.model_dump())
+                elif isinstance(m, dict):
+                    normalized.append(m)
+                else:
+                    normalized.append(dict(m))
+            return normalized
         except Exception as e:
             logger.error(f"Error listing models: {e}")
             return []
