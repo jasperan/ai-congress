@@ -39,6 +39,20 @@ ROLE_SYSTEM_PROMPTS = {
 }
 
 
+# Reasoning-mode instructions appended to the user prompt so the recorded
+# mode (direct / cot / react) actually changes model output (improvement 3.1.1).
+MODE_INSTRUCTIONS = {
+    "cot": "Think step by step and show your work.",
+    "react": "Use tools (search/calculate) before answering.",
+    "direct": "",
+}
+
+
+def get_mode_instruction(mode: str) -> str:
+    """Return the prompt suffix for a reasoning mode ('' for direct)."""
+    return MODE_INSTRUCTIONS.get(mode, MODE_INSTRUCTIONS["direct"])
+
+
 def get_role_prompt(role: str) -> str:
     """Get system prompt for a given role."""
     return ROLE_SYSTEM_PROMPTS.get(role, "")

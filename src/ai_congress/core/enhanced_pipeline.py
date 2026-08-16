@@ -9,7 +9,7 @@ from .acp.roles import AgentRole
 from .acp.run_context import RunStatus
 from .acp.supervisor import RestartPolicy, SupervisedTask
 from .debate_artifact import DebateArtifact
-from .intelligence.role_prompts import get_role_prompt
+from .intelligence.role_prompts import get_mode_instruction, get_role_prompt
 from .precedent.precedent_injector import PrecedentAction
 
 logger = logging.getLogger(__name__)
@@ -182,10 +182,30 @@ async def run_initial_response_wave(
     temperature: float,
     precedent_action: PrecedentAction,
     cited_precedents: list[Any],
+    reasoning_mode: str = "direct",
+    memory_context: str = "",
 ) -> list[dict[str, Any]]:
-    """Run the first supervised response wave and record model health signals."""
+    """Run the first supervised response wave and record model health signals.
+
+    ``reasoning_mode`` appends the mode instruction so routing actually changes
+    output (3.1.1); previously the router picked cot/react but the prompt was
+    identical. ``memory_context`` injects recalled past exchanges (3.1.4).
+    """
     run.log_event("WAVE_1_START", detail="Initial parallel queries with role prompts")
     run.advance_turn()
+
+    # Reasoning-mode instruction (cot/react) actually modifies the prompt now.
+    mode_instruction = get_mode_instruction(reasoning_mode)
+    user_prompt = effective_prompt
+    if mode_instruction:
+        user_prompt = f"{user_prompt}\n\n{mode_instruction}"
+        run.log_event("MODE_INSTRUCTION", detail=f"mode={reasoning_mode}")
+    if memory_context:
+        user_prompt = (
+            f"{user_prompt}\n\n{memory_context}\n\n"
+            "Use the relevant past exchanges above for continuity, "
+            "but answer the current question on its own merits."
+        )
 
     supervised_tasks = []
     for model in available_models:
@@ -216,7 +236,7 @@ async def run_initial_response_wave(
             SupervisedTask(
                 agent_id=model,
                 coro_factory=runtime._throttled_query,
-                args=(model, effective_prompt, temperature),
+                args=(model, user_prompt, temperature),
                 kwargs={"system_prompt": role_system_prompt, "timeout": model_timeout},
                 restart_policy=RestartPolicy.RESTART,
                 max_retries=2,
@@ -354,14 +374,38 @@ async def run_debate_wave(
 
     revised_responses = list(initial_responses)
 
+    # A/B template selection: pick pressure (debate instruction) and critique
+    # (critic role) variants up front so all models see the same template per
+    # run; outcome is recorded at the end (3.5.5).
+    pressure_template = None
+    critique_template = None
+    if getattr(runtime, "prompt_evolution", None) is not None:
+        try:
+            pressure_template = runtime.prompt_evolution.select_template("pressure")
+            critique_template = runtime.prompt_evolution.select_template("critique")
+            run.log_event(
+                "PROMPT_EVOLUTION",
+                detail=f"pressure={pressure_template['id']}, critique={critique_template['id']}",
+            )
+        except Exception as e:
+            logger.warning("Prompt evolution selection failed: %s", e)
+            pressure_template = None
+            critique_template = None
+
     for round_idx in range(debate_rounds):
         round_temp = temp_schedule[round_idx] if round_idx < len(temp_schedule) else 0.4
+        if pressure_template:
+            instruction = pressure_template["text"]
+        else:
+            instruction = (
+                "Review these responses. Reference specific responses by model#hash. "
+                "If you see merit in another position, revise your answer. "
+                "If you still believe your answer is correct, strengthen your argument."
+            )
         critique_prompt = format_anchored_debate_prompt(
             prompt,
             anchored,
-            "Review these responses. Reference specific responses by model#hash. "
-            "If you see merit in another position, revise your answer. "
-            "If you still believe your answer is correct, strengthen your argument.",
+            instruction,
         )
 
         if 0.3 < initial_consensus < 0.7 and round_idx == 0:
@@ -390,6 +434,8 @@ async def run_debate_wave(
                 logger.warning("Devil's advocate failed: %s", e)
 
         critic_system_prompt = get_role_prompt("critic")
+        if critique_template:
+            critic_system_prompt = f"{critic_system_prompt}\n\n{critique_template['text']}"
         critique_tasks = [
             SupervisedTask(
                 agent_id=f"{model}_critique_r{round_idx}",
@@ -466,6 +512,26 @@ async def run_debate_wave(
             round_num=round_idx + 1,
             responses={r["model"]: r["response"][:200] for r in revised_responses},
         )
+
+    # Record prompt-template outcome: consensus reached = high final agreement.
+    if pressure_template is not None and getattr(runtime, "prompt_evolution", None) is not None:
+        try:
+            finals = [r.get("response", "") for r in revised_responses if r.get("response")]
+            consensus_reached = False
+            if len(finals) >= 2:
+                sims = [
+                    runtime.coalition_formation.compute_similarity(finals[i], finals[j])
+                    for i in range(len(finals))
+                    for j in range(i + 1, len(finals))
+                ]
+                consensus_reached = (sum(sims) / len(sims)) >= 0.7 if sims else False
+            runtime.prompt_evolution.record_outcome(
+                pressure_template["id"],
+                consensus_reached=consensus_reached,
+                rounds_needed=debate_rounds,
+            )
+        except Exception as e:
+            logger.warning("Prompt evolution outcome recording failed: %s", e)
 
     return DebateOutcome(
         revised_responses=revised_responses,

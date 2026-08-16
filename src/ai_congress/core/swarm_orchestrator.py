@@ -839,6 +839,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         prompt: str,
         temperature: float = 0.7,
         deliberation_config: Optional[DeliberationConfig] = None,
+        evidence: Optional[bool] = None,
     ) -> Dict:
         """3-round structured deliberation with Problem Restate Gate and Dissent Quota.
 
@@ -847,6 +848,9 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
         divergently, then Round 1 (independent), Round 2 (cross-examination),
         Round 3 (final positions). If premature consensus is detected after
         Round 1 a steelman dissent pass is inserted.
+
+        evidence=True wires web-search evidence into Rounds 1 and 3 (3.3.3);
+        the default comes from config.deliberation.evidence_grounded.
         """
         if not agents:
             return {
@@ -879,13 +883,47 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     round1_word_limit=cfg_yaml.round1_word_limit,
                     round2_word_limit=cfg_yaml.round2_word_limit,
                     round3_word_limit=cfg_yaml.round3_word_limit,
+                    evidence_grounded=getattr(cfg_yaml, "evidence_grounded", False),
+                    evidence_top_results=getattr(cfg_yaml, "evidence_top_results", 3),
+                    prompt_evolution_enabled=getattr(cfg_yaml, "prompt_evolution_enabled", True),
                 )
             else:
                 deliberation_config = DeliberationConfig()
 
+        # Evidence-grounded rounds: lazy WebSearchEngine when requested and
+        # web search is available (duckduckgo-search is a light dep).
+        evidence_engine = None
+        if evidence is None:
+            evidence = deliberation_config.evidence_grounded
+        if evidence:
+            try:
+                from ..integrations.web_search import WebSearchEngine
+                ws_cfg = getattr(config, "web_search", None)
+                evidence_engine = WebSearchEngine(
+                    max_results=deliberation_config.evidence_top_results,
+                    timeout=(ws_cfg.timeout if ws_cfg else 10),
+                    default_engine=(ws_cfg.default_engine if ws_cfg else "duckduckgo"),
+                    searxng_url=(ws_cfg.searxng_url if ws_cfg else ""),
+                    yacy_url=(ws_cfg.yacy_url if ws_cfg else ""),
+                )
+            except Exception as e:
+                logger.warning("Evidence engine unavailable: %s", e)
+                evidence_engine = None
+
+        # A/B cross-examination template (3.5.5).
+        prompt_evolution = None
+        if deliberation_config.prompt_evolution_enabled:
+            try:
+                from .learning.prompt_evolution import PromptEvolution
+                prompt_evolution = PromptEvolution()
+            except Exception as e:
+                logger.warning("Prompt evolution unavailable: %s", e)
+
         orchestrator = DeliberationOrchestrator(
             query_fn=query_fn,
             config=deliberation_config,
+            evidence_engine=evidence_engine,
+            prompt_evolution=prompt_evolution,
         )
 
         info_message(

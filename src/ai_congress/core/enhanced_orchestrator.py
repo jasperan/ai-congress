@@ -44,6 +44,10 @@ from .voting_engine import VotingEngine
 from .intelligence.reasoning_router import ReasoningRouter
 from .intelligence.query_classifier import QueryClassifier
 from .intelligence.moe_router import MixtureOfExpertsRouter
+from .intelligence.agent_memory import AgentMemory
+from .learning.prompt_evolution import PromptEvolution
+from .debate.evidence_grounded import EvidenceGroundedDebate
+from ..utils.config_loader import IntelligenceConfig
 
 # New module imports - voting
 from .voting.ensemble_voter import EnsembleVoter
@@ -102,6 +106,7 @@ class EnhancedOrchestrator:
         web_search_engine=None,
         pi_client=None,
         inference_backend: str = "ollama",
+        intelligence_config: Optional[IntelligenceConfig] = None,
     ):
         self.model_registry = model_registry
         self.voting_engine = voting_engine
@@ -111,6 +116,7 @@ class EnhancedOrchestrator:
         self.personality_loader = personality_loader
         self.rag_engine = rag_engine
         self.web_search_engine = web_search_engine
+        self.intelligence = intelligence_config or IntelligenceConfig()
 
         # ACP infrastructure (original)
         self.registry = AgentRegistry()
@@ -141,6 +147,10 @@ class EnhancedOrchestrator:
         self.reasoning_router = ReasoningRouter()
         self.query_classifier = QueryClassifier()
         self.moe_router = MixtureOfExpertsRouter()
+        # Cross-run memory: recall before Wave 1, add_exchange after the run
+        self.agent_memory = AgentMemory() if self.intelligence.memory_enabled else None
+        # A/B prompt template evolution for debate instructions
+        self.prompt_evolution = PromptEvolution() if self.intelligence.prompt_evolution else None
 
         # Voting
         self.ensemble_voter = EnsembleVoter(self.voting_engine)
@@ -511,6 +521,16 @@ class EnhancedOrchestrator:
         )
         profiler.end_stage("query_decomposition")
 
+        # === (j) Cross-run memory recall (3.1.4) ===
+        memory_context = ""
+        if self.agent_memory is not None:
+            try:
+                memory_context = self.agent_memory.build_memory_context(prompt)
+                if memory_context:
+                    run.log_event("MEMORY_RECALL", detail="relevant past exchanges injected")
+            except Exception as e:
+                logger.warning("Memory recall failed: %s", e)
+                memory_context = ""
         # Start GPU-aware concurrency control
         await self.concurrency_governor.start()
 
@@ -525,6 +545,8 @@ class EnhancedOrchestrator:
             temperature,
             precedent_action,
             cited_precedents,
+            reasoning_mode=reasoning_mode,
+            memory_context=memory_context,
         )
 
         profiler.end_stage("wave_1_queries")
@@ -666,6 +688,15 @@ class EnhancedOrchestrator:
                     confidence = self.confidence_calibrator.calibrate(winning_model, confidence)
         except Exception as e:
             logger.warning("Confidence calibration failed: %s", e)
+
+        # === (q2) Cost-gated self-consistency resampling (3.1.6) ===
+        # When Wave-1 agreement is low, re-sample each model N times at high
+        # temperature and majority-vote: converts model uncertainty into a
+        # measurable signal for exactly the questions that need it.
+        winner, confidence, vote_details = await self._self_consistency_pass(
+            final_models, weights, effective_prompt,
+            winner, confidence, vote_details, run,
+        )
 
         profiler.end_stage("conviction_and_voting")
 
@@ -814,6 +845,13 @@ class EnhancedOrchestrator:
             except Exception as e:
                 logger.warning("Precedent supersession check failed: %s", e)
 
+        # === (v2) Store exchange in cross-run memory (3.1.4) ===
+        if self.agent_memory is not None and winner:
+            try:
+                self.agent_memory.add_exchange(prompt, winner)
+            except Exception as e:
+                logger.warning("Memory store failed: %s", e)
+
         # === (x) End profiler, build result ===
         profiler.end_stage("total_pipeline")
         try:
@@ -858,6 +896,77 @@ class EnhancedOrchestrator:
             await self.concurrency_governor.stop()
         except Exception as e:
             logger.warning("Governor stop failed: %s", e)
+
+    async def _self_consistency_pass(
+        self,
+        final_models: list[str],
+        weights: dict[str, float],
+        effective_prompt: str,
+        winner: str,
+        confidence: float,
+        vote_details: dict,
+        run: ImplementationRun,
+    ) -> tuple[str, float, dict]:
+        """Cost-gated self-consistency resampling (3.1.6).
+
+        When Wave-1 agreement is below the configured threshold, re-sample each
+        model ``samples`` times at high temperature and ensemble-vote the pool.
+        Adopt the resampled winner only if it raises confidence; otherwise keep
+        the original verdict. Returns (winner, confidence, vote_details).
+        """
+        sc = getattr(self.intelligence, "self_consistency", None)
+        agreement_ratio = float(vote_details.get("agreement_ratio", 0.0)) if isinstance(vote_details, dict) else 0.0
+        if (
+            sc is None or not sc.enabled
+            or not winner or not final_models
+            or agreement_ratio >= sc.min_agreement
+            or sc.samples <= 0
+        ):
+            return winner, confidence, vote_details
+
+        try:
+            sc_responses: list[dict] = []
+            for model in final_models:
+                for _ in range(sc.samples):
+                    r = await self._query_model(
+                        model,
+                        effective_prompt,
+                        temperature=sc.temperature,
+                    )
+                    if r.get("success") and r.get("response", "").strip():
+                        sc_responses.append(r)
+            if len(sc_responses) < 2:
+                run.log_event(
+                    "SELF_CONSISTENCY_SKIPPED",
+                    detail=f"insufficient samples ({len(sc_responses)})",
+                )
+                return winner, confidence, vote_details
+
+            sc_result = self.ensemble_voter.ensemble_vote(
+                responses=[r["response"] for r in sc_responses],
+                weights=[weights.get(r["model"], 0.5) for r in sc_responses],
+                model_names=[r["model"] for r in sc_responses],
+                temperatures=[sc.temperature] * len(sc_responses),
+            )
+            sc_winner = sc_result.get("winner", "")
+            sc_conf = float(sc_result.get("confidence", 0.0))
+            if sc_winner and sc_conf > confidence:
+                run.log_event(
+                    "SELF_CONSISTENCY_ADOPTED",
+                    detail=(
+                        f"samples={len(sc_responses)}, "
+                        f"agreement={agreement_ratio:.2f}, "
+                        f"confidence {confidence:.2f}->{sc_conf:.2f}"
+                    ),
+                )
+                return sc_winner, sc_conf, sc_result
+            run.log_event(
+                "SELF_CONSISTENCY_SKIPPED",
+                detail=f"samples={len(sc_responses)}, no confidence gain",
+            )
+        except Exception as e:
+            logger.warning("Self-consistency pass failed: %s", e)
+        return winner, confidence, vote_details
 
     def _build_result(
         self,

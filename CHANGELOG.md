@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Phase 2 — Wire dormant intelligence into the enhanced pipeline
+- **3.1.1 reasoning_mode actually changes prompts**: `MODE_INSTRUCTIONS` in `role_prompts.py`; cot/react instructions are appended to the Wave-1 user prompt — routing finally has an effect on output.
+- **3.1.4 AgentMemory into the pipeline**: recall before Wave 1 (top relevant exchanges injected as continuity context), `add_exchange(prompt, winner)` after each run. Gated by `intelligence.memory_enabled`.
+- **3.1.6 self-consistency gating**: when Wave-1 `agreement_ratio < min_agreement`, each model is re-sampled N× at temperature 0.9 and ensemble-voted; the resampled winner is adopted only if confidence rises. Config: `intelligence.self_consistency.{enabled,samples,min_agreement,temperature}` — cost-gated by design.
+- **3.3.3 evidence-grounded deliberation**: `deliberation_swarm(..., evidence=True)` (or `config.deliberation.evidence_grounded`) searches the web, injects evidence into Round 1 as constrained context and Round 3 as a cross-check, and attaches `evidence_alignment` per final position. Degrades gracefully when web search is unavailable.
+- **3.5.5 prompt-evolution A/B**: debate (critique/pressure) instructions and deliberation Round-2 cross-examination route through `PromptEvolution.select_template` with `record_outcome` per run.
+
 ### Added
 - **pi inference backend**: run the congress against `deepseek-v4-flash` (and other cloud models) via opencode-go alongside local Ollama — selectable per request via `inference_backend: pi | ollama | openai` (API/WS/CLI). Enabled by setting `OPENCODE_GO_API_KEY`.
 - `PiBackendConfig` in the config loader with env overrides (`PI_BASE_URL`, `PI_MODEL`); env overrides now apply even when `config.yaml` is absent.

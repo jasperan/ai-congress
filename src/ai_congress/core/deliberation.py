@@ -30,6 +30,8 @@ from .consensus_detector import (
     detect_consensus,
     pick_steelman_targets,
 )
+from .debate.evidence_grounded import EvidenceGroundedDebate
+from .learning.prompt_evolution import PromptEvolution
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,9 @@ class DeliberationConfig:
     round1_word_limit: int = 400
     round2_word_limit: int = 300
     round3_word_limit: int = 100
+    evidence_grounded: bool = False        # 3.3.3: web-search evidence in R1/R3
+    evidence_top_results: int = 3
+    prompt_evolution_enabled: bool = True  # 3.5.5: A/B cross-exam template
 
 
 @dataclass
@@ -193,9 +198,37 @@ class DeliberationOrchestrator:
         self,
         query_fn: QueryFn,
         config: Optional[DeliberationConfig] = None,
+        evidence_engine=None,
+        prompt_evolution: Optional[PromptEvolution] = None,
     ):
         self.query_fn = query_fn
         self.config = config or DeliberationConfig()
+        self.evidence_engine = evidence_engine
+        self.prompt_evolution = prompt_evolution
+        self.evidence_grounded = EvidenceGroundedDebate() if self.config.evidence_grounded else None
+        self._evidence: Dict[str, List[Dict]] = {}   # claim -> search results
+        self._round2_template_id: Optional[str] = None
+
+    async def _gather_evidence(self, question: str) -> Dict[str, List[Dict]]:
+        """Search once, cache for the whole deliberation (R1 context + R3 check)."""
+        if self._evidence or self.evidence_engine is None:
+            return self._evidence
+        try:
+            self._evidence = await self.evidence_grounded.search_claims([question], self.evidence_engine)
+        except Exception as e:
+            logger.warning("Evidence search failed: %s", e)
+            self._evidence = {question: []}
+        return self._evidence
+
+    def _format_evidence(self, question: str, top_results: Optional[int] = None) -> str:
+        """Format cached evidence as constrained context for the rounds."""
+        if not self._evidence:
+            return ""
+        evidence = {
+            claim: results[: (top_results or self.config.evidence_top_results)]
+            for claim, results in self._evidence.items()
+        }
+        return self.evidence_grounded.format_evidence_prompt(question, [], evidence)
 
     async def _ask(
         self,
@@ -271,6 +304,16 @@ class DeliberationOrchestrator:
         self, agents: List[AgentSpec], question: str, temperature: float
     ) -> RoundResult:
         prompt = ROUND1_PROMPT.format(question=question)
+        if self.config.evidence_grounded and self.evidence_engine is not None:
+            await self._gather_evidence(question)
+            evidence_block = self._format_evidence(question)
+            if evidence_block:
+                prompt = (
+                    f"{prompt}\n\n"
+                    f"{evidence_block}\n\n"
+                    "Treat the search evidence above as constrained context: "
+                    "use it, but flag where your analysis goes beyond it."
+                )
         outputs = await self._ask_all(agents, lambda _a: prompt, temperature)
         for o in outputs:
             o["response"] = _enforce_word_limit(o.get("response", ""), self.config.round1_word_limit)
@@ -283,6 +326,15 @@ class DeliberationOrchestrator:
         round1: RoundResult,
         temperature: float,
     ) -> RoundResult:
+        # A/B the cross-examination instruction via PromptEvolution (3.5.5).
+        pressure_template = None
+        if self.prompt_evolution is not None:
+            try:
+                pressure_template = self.prompt_evolution.select_template("pressure")
+                self._round2_template_id = pressure_template["id"]
+            except Exception as e:
+                logger.warning("Prompt evolution select failed: %s", e)
+
         def build(a: AgentSpec) -> str:
             agent_key = a.get("name") or a.get("role") or a.get("model")
             others_entries = [
@@ -291,7 +343,10 @@ class DeliberationOrchestrator:
                 if (o.get("agent") != agent_key) and o.get("success")
             ]
             others = "\n\n".join(others_entries) or "(no peers responded)"
-            return ROUND2_TEMPLATE.format(others=others, question=question)
+            prompt = ROUND2_TEMPLATE.format(others=others, question=question)
+            if pressure_template:
+                prompt = f"{prompt}\n\n{pressure_template['text']}"
+            return prompt
         outputs = await self._ask_all(agents, build, temperature)
         for o in outputs:
             o["response"] = _enforce_word_limit(o.get("response", ""), self.config.round2_word_limit)
@@ -304,6 +359,16 @@ class DeliberationOrchestrator:
         round2: RoundResult,
         temperature: float,
     ) -> RoundResult:
+        evidence_verification = ""
+        if self.config.evidence_grounded and self._evidence:
+            evidence_block = self._format_evidence(question)
+            if evidence_block:
+                evidence_verification = (
+                    f"\n\n{evidence_block}\n\n"
+                    "Cross-check your final position against the search evidence. "
+                    "If the evidence contradicts you, say so and update your answer."
+                )
+
         def build(a: AgentSpec) -> str:
             agent_key = a.get("name") or a.get("role") or a.get("model")
             others_entries = [
@@ -312,10 +377,18 @@ class DeliberationOrchestrator:
                 if (o.get("agent") != agent_key) and o.get("success")
             ]
             others = "\n\n".join(others_entries) or "(no peers responded)"
-            return ROUND3_TEMPLATE.format(others=others, question=question)
+            return ROUND3_TEMPLATE.format(others=others, question=question) + evidence_verification
         outputs = await self._ask_all(agents, build, temperature)
         for o in outputs:
             o["response"] = _enforce_word_limit(o.get("response", ""), self.config.round3_word_limit)
+
+        # Attach how well each final position aligns with the fetched evidence.
+        if self.evidence_grounded is not None and self._evidence:
+            all_evidence = [item for results in self._evidence.values() for item in results]
+            for o in outputs:
+                o["evidence_alignment"] = self.evidence_grounded.compute_evidence_alignment(
+                    o.get("response", ""), all_evidence
+                )
         return RoundResult(name="round3", outputs=outputs)
 
     async def run_dissent_pass(
@@ -412,6 +485,18 @@ class DeliberationOrchestrator:
             agents, question, round2, temperature=max(0.3, temperature - 0.2)
         )
 
+        # Record A/B cross-exam template outcome (3.5.5).
+        if self._round2_template_id and self.prompt_evolution is not None:
+            try:
+                consensus_reached = not (dissent_report and dissent_report.premature)
+                self.prompt_evolution.record_outcome(
+                    self._round2_template_id,
+                    consensus_reached=consensus_reached,
+                    rounds_needed=3,
+                )
+            except Exception as e:
+                logger.warning("Prompt evolution outcome record failed: %s", e)
+
         return DeliberationResult(
             agents=list(agents),
             restate=restate,
@@ -424,5 +509,7 @@ class DeliberationOrchestrator:
                 "round2_word_limit": self.config.round2_word_limit,
                 "round3_word_limit": self.config.round3_word_limit,
                 "consensus_threshold": self.config.consensus_threshold,
+                "evidence_grounded": self.config.evidence_grounded and bool(self._evidence),
+                "round2_template": self._round2_template_id,
             },
         )

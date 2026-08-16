@@ -84,6 +84,26 @@ class DeliberationConfigModel(BaseModel):
     round1_word_limit: int = 400
     round2_word_limit: int = 300
     round3_word_limit: int = 100
+    evidence_grounded: bool = False
+    evidence_top_results: int = 3
+    prompt_evolution_enabled: bool = True
+
+
+class SelfConsistencyConfig(BaseModel):
+    """Cost-gated self-consistency: resample only on low-agreement votes."""
+    enabled: bool = True
+    samples: int = 2          # extra samples per model at high temperature
+    min_agreement: float = 0.5  # trigger below this agreement_ratio
+    temperature: float = 0.9
+
+
+class IntelligenceConfig(BaseModel):
+    """Dormant-intelligence wiring flags for the enhanced pipeline."""
+    memory_enabled: bool = True          # AgentMemory recall/inject (3.1.4)
+    memory_top_k: int = 3
+    self_consistency: SelfConsistencyConfig = Field(default_factory=SelfConsistencyConfig)
+    evidence_debate: bool = False        # evidence-grounded deliberation rounds (3.3.3)
+    prompt_evolution: bool = True        # A/B debate templates (3.5.5)
 
 
 class ModelWeights(BaseModel):
@@ -199,6 +219,7 @@ class Config(BaseModel):
     swarm: SwarmConfig = Field(default_factory=SwarmConfig)
     voting: VotingConfig = Field(default_factory=VotingConfig)
     deliberation: DeliberationConfigModel = Field(default_factory=DeliberationConfigModel)
+    intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     models: ModelWeights = Field(default_factory=ModelWeights)
     api: APIConfig = Field(default_factory=APIConfig)
