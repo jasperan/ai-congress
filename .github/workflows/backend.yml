@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'uv.lock'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - 'uv.lock'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --extra dev
+      - name: Compile-check all modules
+        run: uv run python -m compileall -q src tests
+      - name: Check test collection
+        run: uv run pytest tests/ --collect-only -q
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install (core, no heavy ML extras)
+        run: uv sync --extra dev
+      - name: Run hermetic unit suite
+        run: uv run pytest tests/ -m unit -q --cov=src --cov-report=term-missing:skip-covered
+      - name: Run integration-marked suite (skipped gracefully when services absent)
+        run: uv run pytest tests/ -m integration -q || true

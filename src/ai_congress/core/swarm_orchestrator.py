@@ -202,6 +202,10 @@ class SwarmOrchestrator:
         if not responses:
             return 0.0
 
+        # Nothing real to compare — failed calls surface as empty strings.
+        if not any((r or "").strip() for r in responses):
+            return 0.0
+
         # Construct prompt for summarizer
         response_list = "\n".join([
             f"{i+1}. {resp} (from {name})"
@@ -221,7 +225,7 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             # Query phi3 for confidence score
             # Use the highest-weighted available model as summarizer
             top_models = self.model_registry.get_top_models(n=1)
-            summarizer_model = top_models[0] if top_models else "phi3:3.8b"
+            summarizer_model = top_models[0] if top_models else config.voting.summarizer_model
             messages = [{'role': 'user', 'content': prompt}]
 
             response = await self.ollama_client.chat(
@@ -356,11 +360,24 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     options={'temperature': temperature},
                     stream=False
                 )
+                content = (response.get('message') or {}).get('content', '')
                 if update_callback:
-                    update_callback('complete', entity_name or model_name, response['message']['content'])
+                    update_callback('complete', entity_name or model_name, content)
+                # The client returns {'error': ...} without 'message' on failure
+                # (e.g. model not found / timeout). Treat that as a failed call
+                # instead of a successful empty response.
+                if response.get('error') or not content.strip():
+                    return {
+                        'model': model_name,
+                        'response': '',
+                        'temperature': temperature,
+                        'success': False,
+                        'error': response.get('error', 'empty response'),
+                        'backend': 'openai' if use_openai else 'ollama',
+                    }
                 return {
                     'model': model_name,
-                    'response': response['message']['content'],
+                    'response': content,
                     'temperature': temperature,
                     'success': True,
                     'backend': 'openai' if use_openai else 'ollama',

@@ -44,7 +44,7 @@ class VotingConfig(BaseModel):
     default_algorithm: str = "weighted_majority"
     consensus_threshold: float = 0.6
     enable_clustering: bool = True
-    summarizer_model: str = "phi3:3.8b"
+    summarizer_model: str = "qwen3.5:9b"
     semantic_confidence_threshold: float = 0.6
     mode: str = "classic"
     debate: DebateVotingConfig = Field(default_factory=DebateVotingConfig)
@@ -65,7 +65,7 @@ class DeliberationConfigModel(BaseModel):
 
 
 class ModelWeights(BaseModel):
-    preferred: list = Field(default_factory=lambda: ["phi3:3.8b", "mistral:7b", "llama3.2:3b"])
+    preferred: list = Field(default_factory=lambda: ["qwen3.5:9b", "gemma3:4b", "qwen2.5:1.5b"])
     weights: Dict[str, float] = Field(default_factory=dict)
 
 
@@ -99,7 +99,7 @@ class LoggingConfig(BaseModel):
 
 
 class AgentsConfig(BaseModel):
-    base_model: str = "mistral:7b"
+    base_model: str = "qwen3.5:9b"
 
 
 class OracleDBConfig(BaseModel):

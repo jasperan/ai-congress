@@ -104,7 +104,7 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 
 ```bash
 ./run_cli.py                                        # Interactive menu
-./run_cli.py chat "What is 2+2?" -m phi3:3.8b -m mistral:7b
+./run_cli.py chat "What is 2+2?" -m qwen3.5:9b -m gemma3:4b
 ./run_cli.py chat "Solve this puzzle..." --reasoning cot
 ./run_cli.py chat "Calculate 25 * 48" --reasoning react
 ./run_cli.py models                                 # List available models
@@ -138,7 +138,7 @@ Triads live in `config/triads.json`. Each one pairs 3 archetypes (Classifier, Em
 #### Web Interface
 
 ```bash
-python run_server.py          # Backend at :8100
+python run_server.py          # Backend at :8000
 cd frontend && npm run dev    # Frontend at :3000
 ```
 
@@ -180,7 +180,7 @@ curl -X POST http://localhost:8000/api/chat/enhanced \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "What caused the 2008 financial crisis?",
-    "models": ["phi3:3.8b", "mistral:7b", "llama3.2:3b"],
+    "models": ["qwen3.5:9b", "gemma3:4b"],
     "enable_decomposition": true,
     "enable_debate": true
   }'
@@ -378,7 +378,7 @@ python -m pytest tests/ -v
 
 ## Documentation
 
-See **[AGENT_HARNESS_ANNEX.md](AGENT_HARNESS_ANNEX.md)** for detailed documentation on reasoning strategies, communication protocols, and architecture.
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for detailed documentation on reasoning strategies, communication protocols, and architecture. (Note: `AGENT_HARNESS_ANNEX.md` has been superseded; the architecture docs are maintained in `docs/`.)
 
 ---
 

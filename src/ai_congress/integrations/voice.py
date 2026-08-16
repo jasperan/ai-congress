@@ -5,9 +5,31 @@ Provides voice-to-text using Faster-Whisper
 import logging
 from typing import Optional, Union
 from pathlib import Path
-from faster_whisper import WhisperModel
 
 logger = logging.getLogger(__name__)
+
+# faster-whisper is a heavy optional dependency. Mirror the graceful pattern
+# from consensus_detector.py: import lazily, cache the failure, and let the
+# caller surface a clear error instead of breaking app/test import.
+_WHISPER_IMPORT_FAILED = False
+_WhisperModel = None
+
+
+def _load_whisper():
+    """Lazily import WhisperModel. Returns the class or None on failure."""
+    global _WhisperModel, _WHISPER_IMPORT_FAILED
+    if _WhisperModel is not None:
+        return _WhisperModel
+    if _WHISPER_IMPORT_FAILED:
+        return None
+    try:
+        from faster_whisper import WhisperModel as _WM  # type: ignore
+        _WhisperModel = _WM
+        return _WhisperModel
+    except Exception as exc:  # pragma: no cover - depends on optional dep
+        _WHISPER_IMPORT_FAILED = True
+        logger.info("faster-whisper unavailable (%s); voice transcription disabled", exc)
+        return None
 
 
 class VoiceTranscriber:
@@ -33,6 +55,13 @@ class VoiceTranscriber:
         self.device = device
         self.compute_type = compute_type
         self.language = language
+
+        WhisperModel = _load_whisper()
+        if WhisperModel is None:
+            raise RuntimeError(
+                "Voice transcription unavailable: 'faster-whisper' is not installed. "
+                "Install it with: pip install faster-whisper"
+            )
 
         logger.info(f"Loading Whisper model: {model_size} on {device}")
 

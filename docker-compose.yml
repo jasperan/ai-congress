@@ -4,15 +4,24 @@ services:
   api:
     build: .
     ports:
-      - "8100:8100"
+      - "8000:8000"
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - CORS_ORIGINS=http://localhost:3000
     volumes:
       - ./config:/app/config
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy

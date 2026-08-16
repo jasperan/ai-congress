@@ -1,11 +1,22 @@
 #!/bin/bash
 
+set -euo pipefail
+
 echo "🚀 Starting AI Congress Setup..."
 
-# Install Python dependencies
+# Install Python dependencies (uv preferred, pip fallback)
 echo "📦 Installing Python dependencies..."
-pip install -r requirements.txt
-pip install -e .
+if command -v uv >/dev/null 2>&1; then
+    echo "   Using uv..."
+    uv pip install -r requirements.txt
+    uv pip install -e .
+    # Optional heavy extras (embeddings + voice) — uncomment to enable local ML:
+    # uv pip install -e ".[full]"
+else
+    echo "   uv not found, using pip..."
+    pip install -r requirements.txt
+    pip install -e .
+fi
 
 # Install frontend dependencies
 echo "🎨 Installing frontend dependencies..."
@@ -44,16 +55,21 @@ except Exception as e:
 " || echo "⚠️  Whisper model will be downloaded on first use"
 }
 
-# Check Ollama configuration
-OLLAMA_URL=$(python -c "import yaml; config = yaml.safe_load(open('config/config.yaml')); print(config['ollama']['base_url'])")
+# Check Ollama configuration (config/config.yaml is optional — use defaults when absent)
+OLLAMA_URL=$(python -c "
+import yaml, os
+try:
+    config = yaml.safe_load(open('config/config.yaml'))
+    print(config.get('ollama', {}).get('base_url', 'http://localhost:11434'))
+except FileNotFoundError:
+    print(os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434'))
+")
 if [[ $OLLAMA_URL == *"localhost"* ]] || [[ $OLLAMA_URL == *"127.0.0.1"* ]]; then
     echo "🏠 Local Ollama detected. Pulling models..."
-    pull_model "phi3:3.8b"
-    pull_model "mistral:7b"
-    pull_model "llama3.2:3b"
-    echo "🆕 Pulling lightweight versions of new models..."
-    pull_model "deepseek-r1:1.5b"
-    pull_model "qwen3:0.6b"
+    pull_model "qwen3.5:9b"
+    pull_model "gemma3:4b"
+    pull_model "qwen2.5:1.5b"
+    pull_model "nomic-embed-text"
 
     echo "🎨 Stable Diffusion will be downloaded from Hugging Face on first use..."
 

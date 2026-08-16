@@ -248,3 +248,4 @@ tui-rs/target/
 
 # Generated content (local only)
 content/
+.ckg/

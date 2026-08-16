@@ -5,12 +5,33 @@ Supports: DuckDuckGo, SearXNG (self-hosted), Yacy (self-hosted)
 """
 import logging
 from typing import List, Dict, Any, Optional
-from duckduckgo_search import DDGS
 import asyncio
 import aiohttp
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
+
+# duckduckgo-search is an optional dependency. Import lazily so the app and
+# test suite still load when it is absent (graceful pattern from consensus_detector).
+_DDGS = None
+_DDGS_IMPORT_FAILED = False
+
+
+def _load_ddgs():
+    """Lazily import DDGS. Returns the class or None on failure."""
+    global _DDGS, _DDGS_IMPORT_FAILED
+    if _DDGS is not None:
+        return _DDGS
+    if _DDGS_IMPORT_FAILED:
+        return None
+    try:
+        from duckduckgo_search import DDGS as _D  # type: ignore
+        _DDGS = _D
+        return _DDGS
+    except Exception as exc:  # pragma: no cover - depends on optional dep
+        _DDGS_IMPORT_FAILED = True
+        logger.info("duckduckgo-search unavailable (%s); DDG engine disabled", exc)
+        return None
 
 
 class WebSearchEngine:
@@ -39,12 +60,17 @@ class WebSearchEngine:
         self.default_engine = default_engine
         self.searxng_url = searxng_url
         self.yacy_url = yacy_url
+        self._ddgs = _load_ddgs()
 
-        available_engines = ["duckduckgo"]
+        available_engines = []
+        if self._ddgs is not None:
+            available_engines.append("duckduckgo")
         if searxng_url:
             available_engines.append("searxng")
         if yacy_url:
             available_engines.append("yacy")
+        if not available_engines:
+            available_engines.append("none (no search backend installed)")
 
         logger.info(f"Web search engine initialized (Available: {', '.join(available_engines)})")
 
@@ -109,7 +135,9 @@ class WebSearchEngine:
     ) -> List[Dict[str, Any]]:
         """Search using DuckDuckGo"""
         def _search():
-            with DDGS() as ddgs:
+            if self._ddgs is None:
+                return []
+            with self._ddgs() as ddgs:
                 results = list(ddgs.text(
                     query,
                     region=region,
@@ -243,7 +271,9 @@ class WebSearchEngine:
             logger.info(f"Searching news for: {query}")
 
             def _search():
-                with DDGS() as ddgs:
+                if self._ddgs is None:
+                    return []
+                with self._ddgs() as ddgs:
                     results = list(ddgs.news(
                         query,
                         region=region,

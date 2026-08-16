@@ -114,7 +114,7 @@ class TestOracleVectorStoreConfig:
         # Verify RAG config
         assert hasattr(config, 'rag')
         assert config.rag.enabled == True
-        assert config.rag.adaptive_chunking == False
+        assert config.rag.adaptive_chunking == True  # semantic-aware chunking is the default
 
         # Verify document extraction config
         assert hasattr(config, 'document_extraction')

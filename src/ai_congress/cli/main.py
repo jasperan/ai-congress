@@ -39,6 +39,14 @@ console = Console(theme=PI_THEME)
 
 # Initialize components
 config = load_config()
+
+
+def _default_models() -> List[str]:
+    """Preferred models from config, falling back to a sane default."""
+    pref = config.models.preferred
+    if pref:
+        return list(pref)
+    return ["qwen3.5:9b"]
 model_registry = ModelRegistry(config.ollama)
 voting_engine = VotingEngine()
 swarm = SwarmOrchestrator(
@@ -136,7 +144,7 @@ async def run_chat_logic(prompt, models, mode, temperature, stream, verbose, per
                 elif mode == "multi_model":
                     result = await swarm.multi_model_swarm(models=models, prompt=prompt, temperature=temperature, reasoning_mode=reasoning)
                 elif mode == "multi_request":
-                    result = await swarm.multi_request_swarm(model=models[0] if models else "mistral:7b", prompt=prompt, temperature=temperature)
+                    result = await swarm.multi_request_swarm(model=models[0] if models else _default_models()[0], prompt=prompt, temperature=temperature)
                 elif mode == "hybrid":
                     result = await swarm.hybrid_swarm(models=models, prompt=prompt, temperature=temperature, stream=stream)
                 elif mode == "personality":
@@ -204,7 +212,7 @@ async def stream_chat(prompt, models, mode, temperature, verbose, personalities=
 @app.command()
 def chat(
     prompt: str = typer.Argument(..., help="The prompt to send to the swarm"),
-    models: List[str] = typer.Option(["phi3:3.8b", "mistral:7b"], "--model", "-m", help="Models to use in swarm"),
+    models: List[str] = typer.Option(["qwen3.5:9b", "gemma3:4b"], "--model", "-m", help="Models to use in swarm"),
     personalities: List[str] = typer.Option([], "--personality", "-p", help="Personalities to use in personality mode"),
     mode: str = typer.Option("multi_model", "--mode", help="Swarm mode: multi_model, multi_request, hybrid, personality, deliberation"),
     temperature: float = typer.Option(0.7, "--temp", "-t", help="Temperature for models"),
@@ -369,7 +377,7 @@ def interactive_menu():
                 openai_model = config.openai.model or "gpt"
                 models_list = [f"{openai_model}:agent-1", f"{openai_model}:agent-2"]
             else:
-                models_list = ["phi3:3.8b", "mistral:7b"]
+                models_list = _default_models()
             if mode == "multi_model":
                  # Maybe ask for models?
                  pass

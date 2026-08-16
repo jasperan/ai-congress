@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+interactive/node_modules/
+interactive/.next/
+
+# Rust / TUI
+tui-rs/target/
+
+# Data & uploads
+data/
+uploads/
+static/
+
+# Secrets & local config
+.env
+.env.*
+!.env.example
+
+# VCS & tooling
+.git/
+.gitignore
+.github/
+.omx/
+.clinerules/
+
+# Docs & images already in repo
+docs/slides/
+img/

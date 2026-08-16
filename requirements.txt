@@ -1,4 +1,4 @@
-# Core Dependencies
+# Core Dependencies (always required)
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 websockets==13.1
@@ -42,9 +42,6 @@ python-multipart==0.0.12
 
 numpy
 
-# Voice Transcription
-faster-whisper==1.0.3
-
 # Oracle Database & Vector Store
 oracledb==2.4.1
 
@@ -55,14 +52,17 @@ openpyxl==3.1.5
 python-pptx==1.0.2
 markdown==3.7
 
-# Embeddings & RAG
-sentence-transformers==3.1.1
-transformers==4.45.2
-torch==2.5.1
-
 # Web Search & Browsing
 duckduckgo-search==6.3.0
 beautifulsoup4==4.12.3
 trafilatura==1.12.2
 lxml==5.3.0
 requests==2.32.3
+
+# Voice Transcription (optional heavy extra — see pyproject [project.optional-dependencies])
+# faster-whisper==1.0.3
+
+# Embeddings & RAG (optional heavy extra — see pyproject [project.optional-dependencies])
+# sentence-transformers==3.1.1
+# transformers==4.45.2
+# torch==2.5.1
