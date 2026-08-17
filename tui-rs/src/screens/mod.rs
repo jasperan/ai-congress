@@ -2,6 +2,10 @@ pub mod chat_dashboard;
 pub mod mode_select;
 pub mod models;
 pub mod results;
+pub mod sim_amendments;
+pub mod sim_network;
+pub mod sim_phases;
+pub mod sim_sentiment;
 pub mod simulation;
 pub mod splash;
 
