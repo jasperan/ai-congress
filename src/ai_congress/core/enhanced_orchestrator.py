@@ -361,6 +361,7 @@ class EnhancedOrchestrator:
         temperature: float = 0.7,
         enable_decomposition: bool = True,
         enable_debate: bool = True,
+        status_callback=None,  # 4.2.4: async (event_type, name, content, full_response)
     ) -> dict:
         """Full enhanced swarm with all 35 improvements integrated.
 
@@ -461,6 +462,11 @@ class EnhancedOrchestrator:
 
         # === (f) Load persisted personality state ===
         load_personality_state(self, available_models, profiles, run)
+
+        await self._emit_stage(
+            status_callback, "initialization",
+            f"{len(available_models)} agents registered, roles assigned",
+        )
 
         profiler.end_stage("initialization")
 
@@ -563,6 +569,16 @@ class EnhancedOrchestrator:
         )
 
         profiler.end_stage("wave_1_queries")
+        await self._emit_stage(
+            status_callback, "wave_1_queries",
+            f"{len([r for r in initial_responses if r.get('success')])} responses",
+        )
+        for _r in initial_responses:
+            if _r.get("success"):
+                await self._emit_stage(
+                    status_callback, "model_response",
+                    f"{_r.get('model')}: {(_r.get('response') or '')[:120]}",
+                )
 
         # === Sub-query revision check after Wave 1 ===
         revised_prompt = await revise_sub_queries_after_wave(
@@ -590,6 +606,7 @@ class EnhancedOrchestrator:
 
         # === (n) Hash-anchored critique wave (Wave 2) with dynamic depth ===
         profiler.start_stage("wave_2_debate")
+        await self._emit_stage(status_callback, "wave_2_debate", "critique wave")
         debate_outcome = await run_debate_wave(
             self,
             run,
@@ -611,6 +628,7 @@ class EnhancedOrchestrator:
 
         # === (o) Compute conviction scores ===
         profiler.start_stage("conviction_and_voting")
+        await self._emit_stage(status_callback, "conviction_and_voting", "coalitions + vote")
         for model in response_models:
             initial = next((r["response"] for r in initial_responses if r["model"] == model), "")
             revised = next((r["response"] for r in revised_responses if r["model"] == model), "")
@@ -1001,6 +1019,10 @@ class EnhancedOrchestrator:
         audit_events: int = 0,
         precedent_info: dict = None,
     ) -> dict:
+        # 3.7.3: remember the last pipeline profile so /enhanced/stats can
+        # expose the waterfall + bottleneck without re-running anything.
+        if performance_profile:
+            self._last_profile = performance_profile
         return {
             "run_id": run.run_id,
             "query": run.query,
@@ -1074,6 +1096,15 @@ class EnhancedOrchestrator:
             except Exception as e:
                 logger.warning("Failed to apply feedback weight delta: %s", e)
 
+    async def _emit_stage(self, callback, stage: str, detail: str = "") -> None:
+        """4.2.4: forward a pipeline stage event to an optional WS callback."""
+        if callback is None:
+            return
+        try:
+            await callback("stage", stage, detail or None, None)
+        except Exception as e:
+            logger.warning("Status callback (stage) failed: %s", e)
+
     def get_performance_stats(self) -> dict:
         """Return combined performance statistics from weight manager and calibrator.
 
@@ -1101,6 +1132,10 @@ class EnhancedOrchestrator:
         except Exception as e:
             logger.warning("Failed to get timeout stats: %s", e)
             stats["adaptive_timeouts"] = {}
+        # 3.7.3: last pipeline profile (waterfall + bottleneck) if any run exists.
+        profile = getattr(self, "_last_profile", None)
+        if profile:
+            stats["profile"] = profile
         return stats
 
     def get_run(self, run_id: str) -> Optional[ImplementationRun]:

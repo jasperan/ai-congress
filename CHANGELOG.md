@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Phase 5 — Observability & UX
+- **3.7.1 frontend observability fields**: new `SourcesPanel` renders RAG chunk attribution (document_id, similarity %, snippet) + web-search results; `/api/chat` now returns a `sources[]` array; new `EnhancedResultPanel` surfaces the enhanced pipeline's computed-but-discarded artifacts — minority report, decision explanation, performance-profile waterfall with bottleneck highlight, precedent citation, and the full event log.
+- **3.7.3 profile waterfall in stats**: `get_performance_stats()` now includes the last run's pipeline profile (`stages`, `total_ms`, `slowest_stage`) — profiling is actionable, not internal.
+- **3.7.4 datalake flush guarantees**: `EventLogger` writes to a date-keyed JSONL fallback under `data/events/` when Oracle is unavailable instead of silently dropping events (`stop()` still flushes the queue); `get_fallback_stats()` reports fallback volume. Live-verified: with Oracle down, the enhanced WS run landed its events in the fallback file.
+- **3.7.5 observability dashboard**: new `/api/observability/summary` + `/leaderboard` (ELO-style weight standings, circuit-breaker states with failure age, calibration stats, recent runs, event-logger fallback counts, MoE routing) and a new "Control Room" Svelte page rendering KPIs, the leaderboard, breakers, calibration, and run history with auto-refresh.
+- **4.2.4 / 4.10.3 streaming for enhanced mode**: `enhanced_swarm` accepts a `status_callback` and emits per-stage events (initialization → wave_1 → per-model responses → debate → conviction/voting); new `/ws/chat/enhanced` streams those stages then the full result (minority report, profile, event log) on `final_answer`. Live-verified with the pi backend.
+- **4.3.4 WebSocket resilience**: new `frontend/src/lib/useSocket.js` — auto-reconnect with exponential backoff, heartbeat ping, and a pending-message queue; `ChatInterface` now uses it (replacing raw `new WebSocket`), shows a live socket-status chip, and gained an "Enhanced" mode option with stage-progress rendering.
+- 12 new unit tests (`tests/test_phase5_observability.py`); suite at 605.
+
 ### Phase 4 — Deliberation exposure
 - **4.2.3 `/api/deliberation` route**: the flagship council mode is now reachable over HTTP (POST /api/deliberation with a `triad` or ≥2 `models`, per-request config overrides, `evidence` rounds). Also wired into `/api/chat` and the `/ws/chat` websocket (mode `deliberation`).
 - **Triad + replay APIs**: `GET /api/triads` and `GET /api/triads/{name}` expose the 20 archetype triads; `GET /api/replays` and `GET /api/replays/{id}` (4.2.2) expose saved debate replays with a formatted timeline.

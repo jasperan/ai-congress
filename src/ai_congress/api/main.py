@@ -32,6 +32,7 @@ from .routes import deliberation as deliberation_routes
 from .routes import documents as documents_routes
 from .routes import images as images_routes
 from .routes import models as models_routes
+from .routes import observability as observability_routes
 from .routes import personalities as personalities_routes
 from .routes import precedents as precedents_routes
 from .routes import search as search_routes
@@ -99,6 +100,7 @@ app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
 # ── Routers ─────────────────────────────────────────────────────────────
 
 app.include_router(models_routes.router)
+app.include_router(observability_routes.router)
 app.include_router(chat_routes.router)
 app.include_router(deliberation_routes.router)
 app.include_router(personalities_routes.router)
@@ -418,5 +420,98 @@ async def websocket_chat(websocket: WebSocket):
                 'type': 'error',
                 'message': str(e)
             })
+        except Exception:
+            pass
+
+
+@app.websocket("/ws/chat/enhanced")
+async def websocket_chat_enhanced(websocket: WebSocket):
+    """Streaming endpoint for the Enhanced Orchestrator (4.2.4).
+
+    Emits per-stage events (wave1 -> debate -> vote) as the 35-improvement
+    pipeline runs, then the full result payload on ``final_answer``.
+    """
+    from .state import get_enhanced_orchestrator
+
+    await websocket.accept()
+    logger.info("Enhanced WebSocket connection established")
+
+    async def status_callback(event_type, entity_name, content=None, full_response=None):
+        if event_type == "stage":
+            await websocket.send_json({
+                'type': 'stage',
+                'stage': entity_name,
+                'message': content,
+            })
+
+    try:
+        data = await websocket.receive_json()
+        prompt = data.get('prompt', '')
+        models = data.get('models') or default_models()
+        inference_backend = data.get('inference_backend', 'ollama')
+
+        orch = get_enhanced_orchestrator()
+        orch.inference_backend = inference_backend
+
+        # Wire RAG / web search when requested.
+        if data.get('use_rag'):
+            from ...core.rag_engine import get_rag_engine
+            orch.rag_engine = get_rag_engine()
+        if data.get('search_web'):
+            from ...integrations.web_search import get_web_search_engine
+            orch.web_search_engine = get_web_search_engine(
+                max_results=getattr(config.web_search, 'max_results', 5),
+                timeout=getattr(config.web_search, 'timeout', 10),
+                default_engine=getattr(config.web_search, 'default_engine', 'duckduckgo'),
+            )
+
+        await websocket.send_json({
+            'type': 'start',
+            'message': f'Enhanced pipeline on {len(models)} models...',
+        })
+
+        result = await orch.enhanced_swarm(
+            prompt=prompt,
+            models=models,
+            temperature=data.get('temperature', 0.7),
+            enable_decomposition=data.get('enable_decomposition', True),
+            enable_debate=data.get('enable_debate', True),
+            status_callback=status_callback,
+        )
+
+        # Individual model responses
+        for r in result.get('responses', []):
+            if r.get('success'):
+                await websocket.send_json({
+                    'type': 'model_response',
+                    'model': r.get('model', 'model'),
+                    'content': r.get('response', ''),
+                })
+
+        await websocket.send_json({
+            'type': 'final_answer',
+            'content': result.get('final_answer', ''),
+            'confidence': result.get('confidence', 0),
+            'vote_breakdown': result.get('vote_breakdown', {}),
+            'data': {
+                'run_id': result.get('run_id'),
+                'minority_report': result.get('minority_report'),
+                'decision_explanation': result.get('decision_explanation'),
+                'performance_profile': result.get('performance_profile'),
+                'event_log': result.get('event_log'),
+                'role_assignments': result.get('role_assignments'),
+                'reasoning_mode': result.get('reasoning_mode'),
+                'duration_seconds': result.get('duration_seconds'),
+                'precedent': result.get('precedent'),
+            },
+        })
+        await websocket.send_json({'type': 'end'})
+
+    except WebSocketDisconnect:
+        logger.info("Enhanced WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"Enhanced WebSocket error: {e}")
+        try:
+            await websocket.send_json({'type': 'error', 'message': str(e)})
         except Exception:
             pass

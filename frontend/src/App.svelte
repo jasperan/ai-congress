@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import ChatInterface from './components/Chat/ChatInterface.svelte'
   import PersonalityChat from './components/Personality/PersonalityChat.svelte'
+  import ObservabilityDashboard from './components/Observability/ObservabilityDashboard.svelte'
 
   let models = []
   let selectedModels = []
@@ -279,6 +280,15 @@
             </svg>
             Character Caucus
           </button>
+          <button
+            on:click={() => activeTab = 'observability'}
+            class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'observability' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Control Room
+          </button>
         </div>
       </div>
 
@@ -288,6 +298,8 @@
           <ChatInterface {models} bind:selectedModels />
         {:else if activeTab === 'personalities'}
           <PersonalityChat {models} />
+        {:else if activeTab === 'observability'}
+          <ObservabilityDashboard />
         {/if}
       </div>
     {/if}

@@ -56,6 +56,7 @@ async def chat(request: ChatRequest):
         augmented_prompt = request.prompt
         context_sources = []
         web_search_results = []
+        rag_chunks = []
 
         # Add web search context if requested
         if request.search_web:
@@ -165,6 +166,18 @@ async def chat(request: ChatRequest):
         # Add context sources to result
         if context_sources:
             result['context_sources'] = context_sources
+
+        # 3.7.1/3.6.3: surface RAG chunk attribution so the UI can show where
+        # the answer came from.
+        if rag_chunks:
+            result['sources'] = [
+                {
+                    'document_id': chunk.get('document_id', ''),
+                    'similarity': round(float(chunk.get('similarity', 0.0)), 3),
+                    'snippet': (chunk.get('content') or '')[:240],
+                }
+                for chunk in rag_chunks[:8]
+            ]
 
         # Add web search results to response if available
         if web_search_results:

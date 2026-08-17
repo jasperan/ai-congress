@@ -2,12 +2,14 @@
 EventLogger — non-blocking, fire-and-forget event logging to Oracle.
 
 Events are queued in-memory and flushed in batches. If Oracle is unavailable,
-events are silently dropped with a warning log. Never crashes the app.
+events are written to a JSONL fallback under ``data/events/`` (3.7.4) instead
+of being silently dropped. Never crashes the app.
 """
 
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -35,10 +37,13 @@ class EventLogger:
         pool_manager: OraclePoolManager,
         batch_size: int = 20,
         flush_interval: float = 5.0,
+        fallback_dir: str = "data/events",
     ):
         self._pool = pool_manager
         self._batch_size = batch_size
         self._flush_interval = flush_interval
+        self._fallback_dir = fallback_dir
+        self._fallback_hits = 0  # count of events written to the JSONL fallback
         self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=10000)
         self._flush_task: Optional[asyncio.Task] = None
         self._sequence_counters: Dict[str, int] = {}
@@ -283,8 +288,13 @@ class EventLogger:
                 logger.warning("Flush loop error: %s", e)
 
     async def _flush_batch(self) -> None:
-        """Drain the queue and write events to Oracle in a batch."""
-        if not self._pool.is_available or self._queue.empty():
+        """Drain the queue and write events to Oracle in a batch.
+
+        3.7.4: when Oracle is unavailable (or the write fails), the batch is
+        appended to a date-keyed JSONL file under ``fallback_dir`` instead of
+        being dropped, so observability never silently loses events.
+        """
+        if self._queue.empty():
             return
 
         batch: List[Event] = []
@@ -295,6 +305,10 @@ class EventLogger:
                 break
 
         if not batch:
+            return
+
+        if not self._pool.is_available:
+            self._write_fallback(batch)
             return
 
         try:
@@ -320,3 +334,31 @@ class EventLogger:
                 logger.debug("Flushed %d events to Oracle", len(batch))
         except Exception as e:
             logger.warning("Failed to flush %d events: %s", len(batch), e)
+            self._write_fallback(batch)
+
+    def _write_fallback(self, batch: List[Event]) -> None:
+        """Append events to a JSONL fallback file (3.7.4)."""
+        try:
+            os.makedirs(self._fallback_dir, exist_ok=True)
+            day = time.strftime("%Y-%m-%d")
+            path = os.path.join(self._fallback_dir, f"events-{day}.jsonl")
+            with open(path, "a") as f:
+                for event in batch:
+                    f.write(json.dumps({
+                        "id": event.id,
+                        "session_id": event.session_id,
+                        "event_type": event.event_type,
+                        "event_data": event.event_data,
+                        "created_at": event.created_at,
+                    }) + "\n")
+            self._fallback_hits += len(batch)
+            logger.warning(
+                "Oracle unavailable — %d events written to fallback %s "
+                "(total fallback: %d)", len(batch), path, self._fallback_hits,
+            )
+        except Exception as e:
+            logger.error("Fallback write failed for %d events: %s", len(batch), e)
+
+    def get_fallback_stats(self) -> Dict[str, Any]:
+        """Report how many events landed in the JSONL fallback."""
+        return {"fallback_hits": self._fallback_hits, "dir": self._fallback_dir}

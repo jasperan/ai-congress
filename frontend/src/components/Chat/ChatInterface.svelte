@@ -2,10 +2,13 @@
   import ModelResponse from '../Models/ModelResponse.svelte'
   import VoteBreakdown from '../Voting/VoteBreakdown.svelte'
   import DeliberationVerdict from './DeliberationVerdict.svelte'
+  import SourcesPanel from './SourcesPanel.svelte'
+  import EnhancedResultPanel from './EnhancedResultPanel.svelte'
   import VoiceInput from '../Voice/VoiceInput.svelte'
   import DocumentUpload from '../Documents/DocumentUpload.svelte'
   import DocumentList from '../Documents/DocumentList.svelte'
   import ImageDisplay from '../Images/ImageDisplay.svelte'
+  import { createSocket } from '../../lib/useSocket.js'
 
   export let models = []
   export let selectedModels = []
@@ -22,6 +25,8 @@
   let currentResult = null
   let websocket = null
   let streamingMessage = null
+  let stageEvents = []
+  let socketStatus = ''
 
   // New feature toggles
   let useRAG = false
@@ -118,114 +123,87 @@
     messages = [...messages, streamingMessage]
 
     try {
-      if (streamResponses) {
-        // Use WebSocket for streaming
-        websocket = new WebSocket(`ws://localhost:8000/ws/chat`)
-
-        websocket.onopen = () => {
-          websocket.send(JSON.stringify({
-            prompt: currentPrompt,
-            models: selectedModels,
-            mode: mode,
-            stream: true,
-            voting_mode: votingMode,
-            triad: triad,
-            evidence: useEvidence
-          }))
-        }
-
-        websocket.onmessage = (event) => {
-          const data = JSON.parse(event.data)
-
-          if (data.type === 'start') {
-            // Update loading message
-            streamingMessage.content = data.message
-            messages = [...messages]
-          } else if (data.type === 'model_response') {
-            // Add individual model response as separate message
-            messages = [...messages, {
-              role: 'assistant',
-              content: data.content,
-              entity_name: data.model,
-              timestamp: Date.now(),
-              isIndividual: true
-            }]
-          } else if (data.type === 'final_answer') {
-            // Final result
-            streamingMessage.content = data.content
-            streamingMessage.result = {
-              confidence: data.confidence,
-              semantic_confidence: data.semantic_confidence,
-              vote_breakdown: data.vote_breakdown,
-              responses: [], // Will be populated if available
-              mode: data.mode,
-              verdict: data.verdict,
-              final_answer: data.content,
-              rounds: (data.data || {}).rounds || [],
-              restate: (data.data || {}).restate || null,
-              dissent_report: (data.data || {}).dissent_report || null,
-              steelman: (data.data || {}).steelman || [],
-              agents_used: (data.data || {}).agents_used || [],
-              engagement_compliance: (data.data || {}).engagement_compliance || null,
-              metadata: (data.data || {}).metadata || {}
+      if (streamResponses || mode === 'enhanced') {
+        // 4.3.4: resilient socket (auto-reconnect + backoff + queue) via useSocket.
+        stageEvents = []
+        const wsUrl = mode === 'enhanced' ? '/ws/chat/enhanced' : '/ws/chat'
+        websocket = createSocket(wsUrl, {
+          onStatus: (status) => { socketStatus = status },
+          onMessage: (data) => {
+            if (data.type === 'start') {
+              streamingMessage.content = data.message
+              messages = [...messages]
+            } else if (data.type === 'stage') {
+              // 4.2.4: enhanced pipeline stage event
+              stageEvents = [...stageEvents, { stage: data.stage, message: data.message || '' }]
+              streamingMessage.content = `⚙️ Stage: ${data.stage}${data.message ? ' — ' + data.message : ''}`
+              messages = [...messages]
+            } else if (data.type === 'model_response') {
+              messages = [...messages, {
+                role: 'assistant',
+                content: data.content,
+                entity_name: data.model,
+                timestamp: Date.now(),
+                isIndividual: true
+              }]
+            } else if (data.type === 'final_answer') {
+              const d = data.data || {}
+              streamingMessage.result = {
+                confidence: data.confidence,
+                semantic_confidence: data.semantic_confidence,
+                vote_breakdown: data.vote_breakdown,
+                responses: [],
+                mode: data.mode,
+                verdict: data.verdict,
+                final_answer: data.content,
+                sources: data.sources || [],
+                rounds: d.rounds || [],
+                restate: d.restate || null,
+                dissent_report: d.dissent_report || null,
+                steelman: d.steelman || [],
+                agents_used: d.agents_used || [],
+                engagement_compliance: d.engagement_compliance || null,
+                metadata: d.metadata || {},
+                stage_events: stageEvents,
+                data: d
+              }
+              // Deliberation verdict text leads the inline message
+              if (data.mode === 'deliberation' && data.verdict) {
+                streamingMessage.content = data.verdict
+              } else {
+                streamingMessage.content = data.content
+              }
+              streamingMessage.result = streamingMessage.result
+              currentResult = streamingMessage.result
+              streamingMessage.isStreaming = false
+              messages = [...messages]
+              websocket.close()
+              websocket = null
+            } else if (data.type === 'error') {
+              streamingMessage.content = `Error: ${data.message}`
+              streamingMessage.isStreaming = false
+              messages = [...messages]
+              websocket.close()
+              websocket = null
             }
-            // Deliberation verdict text leads the inline message
-            if (data.mode === 'deliberation' && data.verdict) {
-              streamingMessage.content = data.verdict
-            }
-            currentResult = streamingMessage.result
-            streamingMessage.isStreaming = false
-            messages = [...messages]
-            websocket.close()
-            websocket = null
-          } else if (data.type === 'error') {
-            streamingMessage.content = `Error: ${data.message}`
-            streamingMessage.isStreaming = false
-            messages = [...messages]
-            websocket.close()
-            websocket = null
-          }
-        }
+          },
+        })
 
-        websocket.onerror = async (error) => {
-          console.error('WebSocket error:', error)
-          // Fallback to non-streaming
-          try {
-            const response = await fetch('/api/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                prompt: currentPrompt,
-                models: selectedModels,
-                mode,
-                triad,
-                evidence: useEvidence
-              })
-            })
-            const result = await response.json()
-            currentResult = result
-            streamingMessage.content = result.final_answer
-            streamingMessage.result = result
-            streamingMessage.isStreaming = false
-            messages = [...messages]
-            isLoading = false
-          } catch (fetchError) {
-            console.error('Fallback fetch error:', fetchError)
-            streamingMessage.content = 'Connection error occurred'
-            streamingMessage.isStreaming = false
-            messages = [...messages]
-            isLoading = false
-          }
-          if (websocket) {
-            websocket.close()
-            websocket = null
-          }
-        }
-
-        websocket.onclose = () => {
-          isLoading = false
-          websocket = null
-        }
+        // createSocket queues this until the socket is open (4.3.4).
+        websocket.send({
+          prompt: currentPrompt,
+          models: selectedModels,
+          mode,
+          stream: true,
+          voting_mode: votingMode,
+          triad,
+          evidence: useEvidence,
+          use_rag: useRAG,
+          search_web: searchWeb,
+          enable_decomposition: true,
+          enable_debate: true,
+          temperature: 0.7
+        })
       } else {
         // Use HTTP for non-streaming
         const requestData = {
@@ -243,7 +221,14 @@
           requestData.document_ids = selectedDocuments
         }
 
-        const response = await fetch('/api/chat', {
+        const endpoint = mode === 'enhanced' ? '/api/chat/enhanced' : '/api/chat'
+        if (mode === 'enhanced') {
+          requestData.temperature = 0.7
+          requestData.enable_decomposition = true
+          requestData.enable_debate = true
+        }
+
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
@@ -286,7 +271,7 @@
   }
 
   // Deliberation with a triad resolves its own council; other modes need models.
-  $: canSend = !isLoading && prompt.trim() && (mode !== 'deliberation' || triad || selectedModels.length >= 2)
+  $: canSend = !isLoading && prompt.trim() && (mode === 'deliberation' ? (triad || selectedModels.length >= 2) : selectedModels.length >= 1)
 
   function toggleModel(modelName) {
     if (selectedModels.includes(modelName)) {
@@ -359,6 +344,7 @@
           <option value="multi_request">🌡️ Multi-Request (Temperature Variation)</option>
           <option value="hybrid">⚡ Hybrid (Both)</option>
           <option value="deliberation">🏛️ Deliberation (Council Debate)</option>
+          <option value="enhanced">🧠 Enhanced (35-improvement pipeline)</option>
         </select>
 
         {#if mode === 'deliberation'}
@@ -402,6 +388,11 @@
         <label for="stream-toggle" class="text-sm font-medium text-text-primary dark:text-text-primary cursor-pointer">
           Stream
         </label>
+        {#if socketStatus}
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full border font-medium {socketStatus === 'open' ? 'bg-success-50 dark:bg-success-900/30 text-success-700 dark:text-success-300 border-success-200 dark:border-success-800' : 'bg-warning-50 dark:bg-warning-900/30 text-warning-700 dark:text-warning-300 border-warning-200 dark:border-warning-800'}">
+            {socketStatus}
+          </span>
+        {/if}
       </div>
 
       <div class="flex items-center space-x-2">
@@ -644,6 +635,29 @@
       <!-- Deliberation Verdict (4.3.2) -->
       {#if currentResult.mode === 'deliberation'}
         <DeliberationVerdict result={currentResult} />
+      {/if}
+
+      <!-- Enhanced pipeline artifacts (3.7.1) -->
+      {#if currentResult.mode === 'enhanced' || currentResult.data?.run_id || currentResult.run_id}
+        <EnhancedResultPanel result={currentResult} />
+      {/if}
+
+      <!-- RAG / web sources (3.7.1) -->
+      {#if (currentResult.sources && currentResult.sources.length > 0) || (currentResult.web_search_results && currentResult.web_search_results.length > 0)}
+        <SourcesPanel sources={currentResult.sources || []} webSearchResults={currentResult.web_search_results || []} />
+      {/if}
+
+      <!-- Stage events (4.2.4) -->
+      {#if currentResult.stage_events && currentResult.stage_events.length > 0}
+        <div class="card p-4 space-y-1">
+          <h4 class="text-sm font-bold text-text-primary dark:text-text-primary mb-2">⚙️ Pipeline Stages</h4>
+          {#each currentResult.stage_events as ev}
+            <div class="flex items-start gap-2 text-xs">
+              <span class="font-mono font-semibold text-primary-600 dark:text-primary-400 shrink-0">{ev.stage}</span>
+              <span class="text-text-secondary dark:text-text-tertiary">{ev.message}</span>
+            </div>
+          {/each}
+        </div>
       {/if}
 
       <!-- Vote Breakdown -->
