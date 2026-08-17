@@ -3,9 +3,9 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 
-from ..state import event_logger, rag_engine
+from ..state import event_logger, rag_engine, security_ctx
 from ...core.rag_engine import get_rag_engine
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".xlsx", "
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
 
 
-@router.post("/documents/upload")
+@router.post("/documents/upload", dependencies=[Depends(security_ctx.require_api_key)])
 async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload and process document for RAG"""
     global rag_engine
@@ -85,7 +85,7 @@ async def list_documents():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/documents/{document_id}")
+@router.delete("/documents/{document_id}", dependencies=[Depends(security_ctx.require_api_key)])
 async def delete_document(document_id: str):
     """Delete a document from vector store"""
     global rag_engine

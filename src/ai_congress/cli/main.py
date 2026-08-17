@@ -25,6 +25,7 @@ from ..core.triads import (
     resolve_triad,
 )
 from ..utils.config_loader import load_config
+from ..utils.evals import EVAL_SET, run_evals, summarize, compute_benchmark_update
 from ..tui.theme import PI_THEME, PI_COLORS, EVENT_ICONS
 from ..tui.components import (
     dynamic_border,
@@ -294,6 +295,45 @@ def models():
         except Exception as e:
             console.print(f"[pi.error]Error listing models: {e}[/pi.error]")
     asyncio.run(list_models())
+
+@app.command("eval")
+def eval_command(
+    models_opt: Optional[str] = typer.Option(None, "--model", "-m", help="Comma-separated models to evaluate (default: all live models)"),
+    update_benchmark: bool = typer.Option(False, "--update-benchmark", help="Fold results back into config/models_benchmark.json (3.5.6)"),
+    question_ids: Optional[str] = typer.Option(None, "--questions", help="Comma-separated eval question ids (default: full set)"),
+):
+    """Run the offline eval harness over live models (3.5.6).
+
+    Scores each model on the curated question set with semantic similarity
+    and writes data/evals/eval_report.json. Optionally updates the benchmark
+    table so weights reflect measured accuracy, not stale hand-tuning.
+    """
+    async def run():
+        available = await model_registry.list_available_models()
+        live = [m["name"] for m in available]
+        if models_opt:
+            requested = [m.strip() for m in models_opt.split(",") if m.strip()]
+        else:
+            requested = live or _default_models()
+        missing = [m for m in requested if m not in live]
+        if missing:
+            console.print(f"[pi.warn]Models not in the live catalog (skipped): {', '.join(missing)}[/pi.warn]")
+        models = [m for m in requested if m in live] or requested
+
+        console.print(f"[bold]Running eval harness over {len(models)} models × {len(EVAL_SET)} questions…[/bold]")
+        report = await run_evals(swarm.ollama_client, models)
+        console.print(summarize(report))
+
+        if update_benchmark:
+            updates = compute_benchmark_update(report)
+            console.print(f"[pi.success]Benchmark updated for {len(updates)} models.[/pi.success]")
+            for model, u in updates.items():
+                console.print(f"  {model}: {u['old']:.3f} -> {u['new']:.3f}")
+        else:
+            console.print("[pi.dim]Use --update-benchmark to fold these scores into models_benchmark.json.[/pi.dim]")
+
+    asyncio.run(run())
+
 
 @app.command()
 def pull(model_name: str = typer.Argument(..., help="Name of model to pull")):

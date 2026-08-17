@@ -54,6 +54,18 @@ async def log_requests(request: Request, call_next):
     """Log all HTTP requests with timing and details"""
     start_time = time.time()
 
+    # 4.9.6: rate limiting — sliding window per client IP, loopback exempt.
+    # Compute-heavy endpoints get the stricter budget via path prefix.
+    from .state import security_ctx
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/observability"):
+        if path.startswith("/api/chat") or path.startswith("/api/deliberation"):
+            from .security import check_rate_limit
+            check_rate_limit(security_ctx.high_rate_limiter, request)
+        else:
+            from .security import check_rate_limit
+            check_rate_limit(security_ctx.rate_limiter, request)
+
     # Log request
     logger.info(f"→ {request.method} {request.url.path}")
     logger.debug(f"  Headers: {dict(request.headers)}")

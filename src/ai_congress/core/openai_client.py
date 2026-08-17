@@ -26,6 +26,8 @@ class OpenAIClient:
         timeout: int = 120,
         max_retries: int = 3,
         max_tokens: int = 4096,
+        spend_governor=None,
+        run_id: str = "",
     ):
         from openai import AsyncOpenAI
 
@@ -34,6 +36,9 @@ class OpenAIClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.max_tokens = max_tokens
+        # 4.9.5: optional cloud-cost guard — None disables the cap
+        self.spend_governor = spend_governor
+        self.run_id = run_id
 
         self.client = AsyncOpenAI(
             base_url=self.base_url,
@@ -58,6 +63,17 @@ class OpenAIClient:
         last_error = None
 
         for attempt in range(1, self.max_retries + 1):
+            # 4.9.5 cloud spend guard: metered backends are budgeted per run
+            # and per session. Once the cap is hit, stop trying — returning an
+            # empty response is cheaper than burning metered tokens.
+            if self.spend_governor is not None and not self.spend_governor.try_acquire(
+                self.run_id, backend="cloud"
+            ):
+                logger.warning(
+                    f"Cloud spend cap reached for run {self.run_id or '?'}; "
+                    f"refusing the call to {model}."
+                )
+                return {"message": {"content": ""}, "error": "spend_limit"}
             try:
                 prompt_preview = truncate_text(
                     messages[-1]["content"] if messages else "", 50

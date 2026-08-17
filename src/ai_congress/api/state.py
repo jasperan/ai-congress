@@ -21,6 +21,7 @@ from ..datalake.logger import EventLogger
 from ..integrations.embeddings import get_embedding_generator
 from ..core.precedent.precedent_store import PrecedentStore
 from ..utils.config_loader import load_config
+from .security import SecurityContext
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,8 @@ swarm = SwarmOrchestrator(
     pi_config=config.pi,
 )
 
-# Data lake (Oracle 26ai Free) — config-driven
+# Security hardening (4.9): shared-key auth, rate limiting, spend guard
+security_ctx = SecurityContext(config)
 oracle_pool = OraclePoolManager(
     host=config.datalake.host,
     port=config.datalake.port,
@@ -75,6 +77,13 @@ def get_enhanced_orchestrator() -> EnhancedOrchestrator:
             intelligence_config=getattr(config, "intelligence", None),
             learning_config=getattr(config, "learning", None),
         )
+
+        # 4.9.5: attach the cloud spend guard to metered clients. Every cloud
+        # call through pi/openai is budgeted per run and per session, so a
+        # runaway enhanced run cannot burn metered tokens.
+        for client in (swarm.pi_client, swarm.openai_client):
+            if client is not None and not hasattr(client, "spend_governor"):
+                client.spend_governor = security_ctx.governor
 
         # Wire precedent store if Oracle is available
         if oracle_pool.is_available:

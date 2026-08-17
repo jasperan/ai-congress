@@ -4,10 +4,10 @@ import json
 import os
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..schemas import Personality, PersonalityCreate
-from ..state import load_personalities
+from ..state import load_personalities, security_ctx, event_logger
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +21,10 @@ async def list_personalities():
     return [Personality(**p) for p in personalities]
 
 
-@router.post("/personalities", response_model=Personality)
+@router.post("/personalities", response_model=Personality, dependencies=[Depends(security_ctx.require_api_key)])
 async def create_personality(personality: PersonalityCreate):
-    """Create a new custom personality"""
+    """Create a new custom personality (4.9.4: optional API key)."""
+    event_logger.log("audit.personality_create", name=personality.name)
     custom_file = "personalities/custom_personalities.json"
 
     # Ensure directory exists

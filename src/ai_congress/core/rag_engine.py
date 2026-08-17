@@ -263,7 +263,13 @@ Context:
 Question: {query}
 
 Answer:"""
-            
+
+            # 4.9.3: append the untrusted-data warning OUTSIDE the template so
+            # it cannot be templated away — retrieved docs are data, not
+            # authority, and any instructions inside them must be ignored.
+            from ..api.security import harden_rag_context
+            context_text = harden_rag_context(context_text)
+
             # Augment query
             augmented_query = format_template.format(
                 context=context_text,

@@ -2,13 +2,13 @@
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 
 from ..schemas import ChatRequest, EnhancedChatRequest, FeedbackRequest
 from ..state import (
     config, event_logger, get_enhanced_orchestrator, rag_engine,
-    web_search_engine, swarm,
+    web_search_engine, swarm, security_ctx,
 )
 from ...integrations.web_search import get_web_search_engine
 from ...core.rag_engine import get_rag_engine
@@ -282,9 +282,9 @@ async def enhanced_chat(request: EnhancedChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/feedback")
+@router.post("/feedback", dependencies=[Depends(security_ctx.require_api_key)])
 async def submit_feedback(request: FeedbackRequest):
-    """Submit user feedback on a model response."""
+    """Submit user feedback on a model response (4.9.4: optional API key)."""
     try:
         orch = get_enhanced_orchestrator()
         orch.record_feedback(
@@ -292,10 +292,12 @@ async def submit_feedback(request: FeedbackRequest):
             response_text=request.response_text or "",
             domain=request.domain or "",
         )
-        event_logger.log("user_feedback",
+        # 4.9.6: audit trail for learning-state mutation
+        event_logger.log("audit.feedback",
             session_id=request.session_id,
             model=request.model,
             feedback=request.feedback,
+            action="weight_update",
         )
         return {"success": True, "message": "Feedback recorded"}
     except Exception as e:

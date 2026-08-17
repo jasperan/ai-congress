@@ -226,6 +226,20 @@ class LearningConfig(BaseModel):
     feedback_learning_rate_scale: float = 0.25
 
 
+class SecurityConfig(BaseModel):
+    """API hardening (4.9): optional shared-key auth, rate limiting, and a
+    cloud spend guard so metered backends can't be drained by a runaway run.
+    """
+    api_key_enabled: bool = False
+    api_key: str = ""
+    # 4.9.6: sliding-window limit per client IP. 0 disables.
+    rate_limit_per_minute: int = 60
+    rate_limit_high: int = 120  # stricter for compute-heavy endpoints
+    # 4.9.5: cap cloud-backend (pi/openai) calls per run and per session.
+    max_cloud_calls_per_run: int = 12
+    max_cloud_calls_per_session: int = 100
+
+
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
@@ -237,6 +251,7 @@ class Config(BaseModel):
     learning: LearningConfig = Field(default_factory=LearningConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     models: ModelWeights = Field(default_factory=ModelWeights)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     cli: CLIConfig = Field(default_factory=CLIConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
@@ -331,6 +346,13 @@ def _apply_env_overrides(config: Config) -> Config:
         config.pi.base_url = os.getenv("PI_BASE_URL")
     if os.getenv("PI_MODEL"):
         config.pi.model = os.getenv("PI_MODEL")
+
+    # Security hardening (4.9): optional shared API key + rate-limit tuning
+    if os.getenv("AICONGRESS_API_KEY"):
+        config.security.api_key_enabled = True
+        config.security.api_key = os.getenv("AICONGRESS_API_KEY")
+    if os.getenv("AICONGRESS_RATE_LIMIT"):
+        config.security.rate_limit_per_minute = int(os.getenv("AICONGRESS_RATE_LIMIT"))
 
     return config
 

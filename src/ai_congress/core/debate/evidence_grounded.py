@@ -66,8 +66,13 @@ class EvidenceGroundedDebate:
             parts.append(f"  [{model}]: {text}")
         parts.append("")
 
-        # Present evidence
-        parts.append("Here are search results relevant to the claims in this debate:")
+        # 4.9.3: evidence is data, not instructions — the warning is appended
+        # so retrieved/web content's embedded instructions cannot override
+        # the council prompt.
+        from ...api.security import harden_deliberation_evidence
+        parts.append(harden_deliberation_evidence(
+            "Here are search results relevant to the claims in this debate:"
+        ))
         for claim, results in evidence.items():
             parts.append(f"\n  Claim: \"{claim}\"")
             if not results:
