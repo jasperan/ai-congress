@@ -25,6 +25,11 @@ pub struct WsChatRequest {
     pub personalities: Option<Vec<PersonalityRef>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<HistoryEntry>>,
+    // 4.4.1: deliberation launch params
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triad: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,6 +60,9 @@ pub struct WsChatEvent {
     pub semantic_vote: Option<serde_json::Value>,
     pub personalities: Option<Vec<serde_json::Value>>,
     pub data: Option<serde_json::Value>,
+    // 4.4.1: verdict + mode arrive on final_answer for deliberation
+    pub mode: Option<String>,
+    pub verdict: Option<String>,
 }
 
 pub struct WsChatClient {

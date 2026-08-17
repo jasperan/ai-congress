@@ -9,7 +9,7 @@ use tui_input::Input;
 
 use crate::theme;
 
-const SWARM_MODES: &[&str] = &["multi_model", "multi_request", "hybrid", "personality", "streaming"];
+const SWARM_MODES: &[&str] = &["multi_model", "multi_request", "hybrid", "personality", "deliberation", "streaming"];
 const VOTING_MODES: &[&str] = &["classic", "semantic"];
 const BACKENDS: &[&str] = &["ollama", "openai"];
 

@@ -309,7 +309,11 @@ class TestPromptEvolutionWiring:
             captured["prompt"] = messages[-1]["content"]
             return {"response": "member reply", "success": True}
 
-        orch = DeliberationOrchestrator(query_fn=query_fn, prompt_evolution=pe)
+        orch = DeliberationOrchestrator(
+            query_fn=query_fn,
+            prompt_evolution=pe,
+            config=DeliberationConfig(engagement_re_prompt=False),
+        )
         agents = [
             {"role": "member_1", "name": "a1", "model": "m1", "system_prompt": "sys"},
             {"role": "member_2", "name": "a2", "model": "m2", "system_prompt": "sys"},

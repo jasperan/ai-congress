@@ -1,6 +1,7 @@
 <script>
   import ModelResponse from '../Models/ModelResponse.svelte'
   import VoteBreakdown from '../Voting/VoteBreakdown.svelte'
+  import DeliberationVerdict from './DeliberationVerdict.svelte'
   import VoiceInput from '../Voice/VoiceInput.svelte'
   import DocumentUpload from '../Documents/DocumentUpload.svelte'
   import DocumentList from '../Documents/DocumentList.svelte'
@@ -11,6 +12,9 @@
 
   let prompt = ''
   let mode = 'multi_model'
+  let triad = null
+  let triads = []
+  let useEvidence = false
   let streamResponses = false
   let messages = []
   let isLoading = false
@@ -32,6 +36,14 @@
   let imageGenPrompt = ''
   let generatedImage = null
   let isGeneratingImage = false
+
+  // Load the triad catalog once (deliberation mode)
+  $: if (mode === 'deliberation' && triads.length === 0) {
+    fetch('/api/triads')
+      .then(r => r.json())
+      .then(d => { triads = d.triads || [] })
+      .catch(e => console.error('Failed to load triads:', e))
+  }
 
   function handleVoiceTranscription(text) {
     prompt = text
@@ -79,7 +91,12 @@
   }
 
   async function sendMessage() {
-    if (!prompt.trim() || selectedModels.length === 0) {
+    if (!prompt.trim()) {
+      return
+    }
+    // Deliberation with a triad resolves its own council; other modes need models.
+    const needsModels = !(mode === 'deliberation' && triad)
+    if (needsModels && selectedModels.length === 0) {
       return
     }
 
@@ -111,7 +128,9 @@
             models: selectedModels,
             mode: mode,
             stream: true,
-            voting_mode: votingMode
+            voting_mode: votingMode,
+            triad: triad,
+            evidence: useEvidence
           }))
         }
 
@@ -138,7 +157,21 @@
               confidence: data.confidence,
               semantic_confidence: data.semantic_confidence,
               vote_breakdown: data.vote_breakdown,
-              responses: [] // Will be populated if available
+              responses: [], // Will be populated if available
+              mode: data.mode,
+              verdict: data.verdict,
+              final_answer: data.content,
+              rounds: (data.data || {}).rounds || [],
+              restate: (data.data || {}).restate || null,
+              dissent_report: (data.data || {}).dissent_report || null,
+              steelman: (data.data || {}).steelman || [],
+              agents_used: (data.data || {}).agents_used || [],
+              engagement_compliance: (data.data || {}).engagement_compliance || null,
+              metadata: (data.data || {}).metadata || {}
+            }
+            // Deliberation verdict text leads the inline message
+            if (data.mode === 'deliberation' && data.verdict) {
+              streamingMessage.content = data.verdict
             }
             currentResult = streamingMessage.result
             streamingMessage.isStreaming = false
@@ -164,7 +197,9 @@
               body: JSON.stringify({
                 prompt: currentPrompt,
                 models: selectedModels,
-                mode
+                mode,
+                triad,
+                evidence: useEvidence
               })
             })
             const result = await response.json()
@@ -199,7 +234,9 @@
           mode,
           use_rag: useRAG,
           search_web: searchWeb,
-          voting_mode: votingMode
+          voting_mode: votingMode,
+          triad: triad,
+          evidence: useEvidence
         }
 
         if (useRAG && selectedDocuments.length > 0) {
@@ -217,6 +254,11 @@
 
         // Build final content with web search results if available
         let finalContent = result.final_answer
+
+        // Deliberation verdict text leads the inline message
+        if (result.mode === 'deliberation' && result.verdict) {
+          finalContent = result.verdict
+        }
 
         if (result.web_search_results && result.web_search_results.length > 0) {
           finalContent = `**Web Search Results:**\n\n${result.web_search_results.map(item => `- **${item.title}**: ${item.description}\n  [${item.url}]`).join('\n\n')}\n\n---\n\n${result.final_answer}`
@@ -242,6 +284,9 @@
       }
     }
   }
+
+  // Deliberation with a triad resolves its own council; other modes need models.
+  $: canSend = !isLoading && prompt.trim() && (mode !== 'deliberation' || triad || selectedModels.length >= 2)
 
   function toggleModel(modelName) {
     if (selectedModels.includes(modelName)) {
@@ -313,7 +358,36 @@
           <option value="multi_model">🔄 Multi-Model (Different Models)</option>
           <option value="multi_request">🌡️ Multi-Request (Temperature Variation)</option>
           <option value="hybrid">⚡ Hybrid (Both)</option>
+          <option value="deliberation">🏛️ Deliberation (Council Debate)</option>
         </select>
+
+        {#if mode === 'deliberation'}
+          <div class="flex items-center space-x-3">
+            <label for="triad-select" class="text-sm font-semibold text-text-primary dark:text-text-primary whitespace-nowrap">
+              Triad:
+            </label>
+            <select
+              id="triad-select"
+              bind:value={triad}
+              class="input-field text-sm py-2 w-auto cursor-pointer focus:ring-2 focus:ring-primary focus:border-primary-500"
+            >
+              <option value={null}>— custom (use selected models) —</option>
+              {#each triads as t}
+                <option value={t.name}>{t.name}</option>
+              {/each}
+            </select>
+            <label for="evidence-toggle" class="text-sm font-medium text-text-primary dark:text-text-primary cursor-pointer flex items-center space-x-1">
+              <input
+                id="evidence-toggle"
+                type="checkbox"
+                bind:checked={useEvidence}
+                class="toggle-switch {useEvidence ? 'checked' : ''}"
+                aria-label="Ground deliberation rounds in web-search evidence"
+              />
+              <span>🌐 Evidence</span>
+            </label>
+          </div>
+        {/if}
       </div>
 
       <!-- Feature Toggles -->
@@ -499,11 +573,11 @@
           on:keydown={handleKeydown}
           placeholder="Type your message... (Shift+Enter for new line)"
           class="input-field resize-none h-20"
-          disabled={isLoading || selectedModels.length === 0}
+          disabled={isLoading || (!(mode === 'deliberation' && triad) && selectedModels.length === 0)}
           aria-describedby="input-help"
         />
 
-        {#if selectedModels.length === 0}
+        {#if !(mode === 'deliberation' && triad) && selectedModels.length === 0}
           <p class="text-xs text-danger-600 dark:text-danger-400" role="alert">
             Please select at least one model to start chatting
           </p>
@@ -518,7 +592,7 @@
 
         <button
           on:click={sendMessage}
-          disabled={isLoading || !prompt.trim() || selectedModels.length === 0}
+          disabled={!canSend}
           class="btn-primary px-6 flex items-center justify-center space-x-2 flex-1"
         >
           {#if isLoading}
@@ -566,6 +640,11 @@
           </svg>
         </button>
       </div>
+
+      <!-- Deliberation Verdict (4.3.2) -->
+      {#if currentResult.mode === 'deliberation'}
+        <DeliberationVerdict result={currentResult} />
+      {/if}
 
       <!-- Vote Breakdown -->
       {#if currentResult.vote_breakdown || currentResult.confidence}

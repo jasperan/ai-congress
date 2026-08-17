@@ -111,6 +111,9 @@ class DeliberationConfig:
     evidence_grounded: bool = False        # 3.3.3: web-search evidence in R1/R3
     evidence_top_results: int = 3
     prompt_evolution_enabled: bool = True  # 3.5.5: A/B cross-exam template
+    engagement_required: bool = True       # 3.3.1: enforce the >=2-peers protocol
+    engagement_min_peers: int = 2
+    engagement_re_prompt: bool = True      # re-ask non-compliant members once
 
 
 @dataclass
@@ -149,6 +152,75 @@ def _enforce_word_limit(text: str, limit: int) -> str:
     if len(words) <= limit:
         return text
     return " ".join(words[:limit]) + " [...]"
+
+
+ENGAGEMENT_REPROMPT_TEMPLATE = (
+    "Round 2 compliance check: your previous response did not engage the "
+    "council by name. The protocol REQUIRES you to address at least "
+    "{min_peers} other members by name before giving your position. "
+    "Other members are: {peer_names}.\n\n"
+    "Quote the specific claim you are responding to, then agree, disagree, "
+    "or refine it. Rewrite your Round 2 response now (under {word_limit} words), "
+    "mentioning at least {min_peers} of those members by name.\n\n"
+    "User's question:\n{question}"
+)
+
+
+def _peer_tokens(agent: AgentSpec) -> List[str]:
+    """Return the name/role tokens a peer can be addressed by (lowercased).
+
+    Agent names often carry a model suffix (e.g. ``member_1@qwen3.5:9b``);
+    the model name is not a peer token, so we strip the part after '@'.
+    """
+    tokens: List[str] = []
+    name = (agent.get("name") or "").split("@")[0].strip().lower()
+    role = (agent.get("role") or "").strip().lower()
+    if name:
+        tokens.append(name)
+    if role and role != name:
+        tokens.append(role)
+    return [t for t in dict.fromkeys(tokens) if t]
+
+
+def _check_engagement(
+    outputs: List[Dict],
+    peers: List[AgentSpec],
+    min_peers: int = 2,
+) -> Dict[str, List[str]]:
+    """Verify Round-2 outputs actually engage peers by name (3.3.1).
+
+    Returns ``{agent_key: [engaged_peer_token, ...]}`` where ``agent_key``
+    matches the ``agent`` field of the output dicts. Only peers whose Round-1
+    response succeeded are eligible targets (you cannot engage a silent
+    member), mirroring how Round 2 builds the ``others`` context.
+    """
+    engaged: Dict[str, List[str]] = {}
+    # An output can only engage peers whose Round-1 response was successful
+    # and visible to them; use the same eligibility rule as the template.
+    eligible = peers
+    for o in outputs:
+        agent_key = o.get("agent")
+        text = (o.get("response") or "").lower()
+        hits: List[str] = []
+        for peer in eligible:
+            peer_key = peer.get("name") or peer.get("role") or peer.get("model")
+            if peer_key == agent_key:
+                continue  # a member cannot engage itself
+            for token in _peer_tokens(peer):
+                if token and token in text:
+                    hits.append(token)
+                    break
+        engaged[agent_key] = hits
+    return engaged
+
+
+def _count_engagement(
+    engaged: Dict[str, List[str]], min_peers: int = 2
+) -> Tuple[int, int]:
+    """Return (compliant_count, total_count) for a round's engagement map."""
+    total = len(engaged)
+    compliant = sum(1 for hits in engaged.values() if len(set(hits)) >= min_peers)
+    return compliant, total
 
 
 def _parse_restate(raw: str) -> Tuple[str, str]:
@@ -350,7 +422,98 @@ class DeliberationOrchestrator:
         outputs = await self._ask_all(agents, build, temperature)
         for o in outputs:
             o["response"] = _enforce_word_limit(o.get("response", ""), self.config.round2_word_limit)
+
+        # 3.3.1: enforce the protocol's Round-2 engagement rule (>= min_peers
+        # named peers). Non-compliant members are re-prompted once.
+        outputs = await self._enforce_engagement(
+            agents, question, round1, outputs, temperature,
+        )
         return RoundResult(name="round2", outputs=outputs)
+
+    async def _enforce_engagement(
+        self,
+        agents: List[AgentSpec],
+        question: str,
+        round1: RoundResult,
+        outputs: List[Dict],
+        temperature: float,
+    ) -> List[Dict]:
+        """Round-2 engagement compliance (3.3.1).
+
+        Checks each output mentions >= engagement_min_peers other members by
+        name; annotates every output with an ``engagement`` dict and re-prompts
+        non-compliant members once when ``engagement_re_prompt`` is on.
+        """
+        min_peers = self.config.engagement_min_peers
+        if not self.config.engagement_required:
+            for o in outputs:
+                o["engagement"] = {
+                    "compliant": True,
+                    "required": min_peers,
+                    "re_prompted": False,
+                    "peers_engaged": [],
+                }
+            return outputs
+
+        # Peers eligible for engagement: members whose Round-1 output succeeded.
+        successful_keys = {o.get("agent") for o in round1.outputs if o.get("success")}
+        peers = [
+            a for a in agents
+            if (a.get("name") or a.get("role") or a.get("model")) in successful_keys
+        ]
+        if not peers:
+            peers = agents
+
+        def annotate(o: Dict, engaged: List[str], re_prompted: bool) -> None:
+            o["engagement"] = {
+                "compliant": len(set(engaged)) >= min_peers,
+                "required": min_peers,
+                "re_prompted": re_prompted,
+                "peers_engaged": sorted(set(engaged)),
+            }
+
+        engaged_map = _check_engagement(outputs, peers, min_peers)
+        for o in outputs:
+            annotate(o, engaged_map.get(o.get("agent"), []), False)
+
+        if not self.config.engagement_re_prompt:
+            return outputs
+
+        def find_agent(agent_key: str) -> Optional[AgentSpec]:
+            for a in agents:
+                if (a.get("name") or a.get("role") or a.get("model")) == agent_key:
+                    return a
+            return None
+
+        for o in outputs:
+            if o.get("engagement", {}).get("compliant"):
+                continue
+            agent = find_agent(o.get("agent"))
+            if agent is None:
+                continue
+            others = [p for p in peers if (p.get("name") or p.get("role") or p.get("model")) != o.get("agent")]
+            peer_names = ", ".join(sorted({tok for p in others for tok in _peer_tokens(p)}))
+            if not peer_names:
+                continue
+            prompt = ENGAGEMENT_REPROMPT_TEMPLATE.format(
+                min_peers=min_peers,
+                peer_names=peer_names,
+                word_limit=self.config.round2_word_limit,
+                question=question,
+            )
+            retry = await self._ask(agent, prompt, temperature)
+            retry["response"] = _enforce_word_limit(
+                retry.get("response", ""), self.config.round2_word_limit
+            )
+            retry_engaged = _check_engagement([retry], others, min_peers)
+            annotate(retry, retry_engaged.get(retry.get("agent"), []), True)
+            logger.info(
+                "deliberation: re-prompted %s for Round-2 engagement "
+                "(compliant after retry: %s)",
+                o.get("agent"), retry["engagement"]["compliant"],
+            )
+            outputs[outputs.index(o)] = retry
+        return outputs
 
     async def run_round3(
         self,
@@ -497,6 +660,25 @@ class DeliberationOrchestrator:
             except Exception as e:
                 logger.warning("Prompt evolution outcome record failed: %s", e)
 
+        # Round-2 engagement compliance summary (3.3.1).
+        engagement_compliance = None
+        if self.config.engagement_required:
+            engaged_map = _check_engagement(
+                round2.outputs, agents, self.config.engagement_min_peers
+            )
+            compliant, total = _count_engagement(
+                engaged_map, self.config.engagement_min_peers
+            )
+            re_prompted = sum(
+                1 for o in round2.outputs if o.get("engagement", {}).get("re_prompted")
+            )
+            engagement_compliance = {
+                "compliant": compliant,
+                "total": total,
+                "re_prompted": re_prompted,
+                "min_peers": self.config.engagement_min_peers,
+            }
+
         return DeliberationResult(
             agents=list(agents),
             restate=restate,
@@ -511,5 +693,6 @@ class DeliberationOrchestrator:
                 "consensus_threshold": self.config.consensus_threshold,
                 "evidence_grounded": self.config.evidence_grounded and bool(self._evidence),
                 "round2_template": self._round2_template_id,
+                "engagement_compliance": engagement_compliance,
             },
         )

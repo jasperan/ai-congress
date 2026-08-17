@@ -229,9 +229,12 @@ impl ChatDashboardScreen {
             }
 
             "final_answer" => {
+                // 4.4.1: deliberation verdicts arrive as structured text —
+                // prefer the full verdict over the plain final answer.
                 self.final_answer = event
-                    .response
+                    .verdict
                     .clone()
+                    .or_else(|| event.response.clone())
                     .or_else(|| event.content.clone())
                     .or_else(|| event.message.clone());
                 self.confidence = event.confidence.or(event.semantic_confidence);

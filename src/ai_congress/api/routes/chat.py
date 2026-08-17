@@ -133,6 +133,18 @@ async def chat(request: ChatRequest):
                 temperatures=temps,
                 system_prompt=request.system_prompt
             )
+        elif request.mode == "deliberation":
+            # The flagship mode over HTTP: resolve a council and run the
+            # 3-round protocol. Uses the raw prompt (the protocol runs its
+            # own restate gate + optional evidence rounds).
+            from .deliberation import _build_agents
+            agents = await _build_agents(request.triad, request.models)
+            result = await swarm.deliberation_swarm(
+                agents=agents,
+                prompt=request.prompt,
+                temperature=request.temperature,
+                evidence=request.evidence,
+            )
         elif request.mode == "personality":
             if not request.personalities:
                 raise HTTPException(status_code=400, detail="Personalities required for personality mode")

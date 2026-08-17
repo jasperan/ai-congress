@@ -886,6 +886,9 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
                     evidence_grounded=getattr(cfg_yaml, "evidence_grounded", False),
                     evidence_top_results=getattr(cfg_yaml, "evidence_top_results", 3),
                     prompt_evolution_enabled=getattr(cfg_yaml, "prompt_evolution_enabled", True),
+                    engagement_required=getattr(cfg_yaml, "engagement_required", True),
+                    engagement_min_peers=getattr(cfg_yaml, "engagement_min_peers", 2),
+                    engagement_re_prompt=getattr(cfg_yaml, "engagement_re_prompt", True),
                 )
             else:
                 deliberation_config = DeliberationConfig()
@@ -1007,4 +1010,5 @@ Output only a confidence score from 0.0 (no agreement, completely different mean
             'vote_breakdown': vote_breakdown,
             'agents_used': [a.get('name') or a.get('role') for a in agents],
             'metadata': result.metadata,
+            'engagement_compliance': result.metadata.get('engagement_compliance'),
         }

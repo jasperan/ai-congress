@@ -368,6 +368,8 @@ async fn handle_screen_switch(
                         inference_backend: Some(config.inference_backend.clone()),
                         personalities: None,
                         history: None,
+                        triad: None,
+                        evidence: None,
                     };
                     let _ = client.send_chat(req).await;
                     *ws_chat = Some(client);

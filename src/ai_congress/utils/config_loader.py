@@ -87,6 +87,10 @@ class DeliberationConfigModel(BaseModel):
     evidence_grounded: bool = False
     evidence_top_results: int = 3
     prompt_evolution_enabled: bool = True
+    # 3.3.1: enforce the protocol's Round-2 "engage >= 2 peers by name" rule
+    engagement_required: bool = True
+    engagement_min_peers: int = 2
+    engagement_re_prompt: bool = True
 
 
 class SelfConsistencyConfig(BaseModel):

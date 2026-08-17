@@ -28,6 +28,7 @@ from .state import (
     default_models,
 )
 from .routes import chat as chat_routes
+from .routes import deliberation as deliberation_routes
 from .routes import documents as documents_routes
 from .routes import images as images_routes
 from .routes import models as models_routes
@@ -99,6 +100,7 @@ app.add_middleware(DataLakeMiddleware, event_logger=event_logger)
 
 app.include_router(models_routes.router)
 app.include_router(chat_routes.router)
+app.include_router(deliberation_routes.router)
 app.include_router(personalities_routes.router)
 app.include_router(documents_routes.router)
 app.include_router(search_routes.router)
@@ -337,6 +339,17 @@ async def websocket_chat(websocket: WebSocket):
                     stream=stream,
                     update_callback=status_callback
                 )
+            elif mode == "deliberation":
+                # Flagship mode over WS: resolve a council from the triad
+                # (or raw models) and run the 3-round protocol.
+                from .routes.deliberation import _build_agents
+                agents = await _build_agents(data.get('triad'), models)
+                result = await swarm.deliberation_swarm(
+                    agents=agents,
+                    prompt=prompt,
+                    temperature=data.get('temperature', 0.7),
+                    evidence=data.get('evidence'),
+                )
             else:
                 await websocket.send_json({
                     'type': 'error',
@@ -361,6 +374,19 @@ async def websocket_chat(websocket: WebSocket):
                 'semantic_confidence': result.get('semantic_confidence', 0),
                 'vote_breakdown': result.get('vote_breakdown', {}),
                 'semantic_vote': result.get('semantic_vote'),
+                # 4.3.2: verdict payload for the deliberation UI
+                'mode': result.get('mode'),
+                'verdict': result.get('verdict'),
+                'data': {
+                    'rounds': result.get('rounds'),
+                    'restate': result.get('restate'),
+                    'dissent_report': result.get('dissent_report'),
+                    'steelman': result.get('steelman'),
+                    'final_positions': result.get('responses'),
+                    'agents_used': result.get('agents_used'),
+                    'engagement_compliance': result.get('engagement_compliance'),
+                    'metadata': result.get('metadata'),
+                },
             })
 
             # Log to data lake

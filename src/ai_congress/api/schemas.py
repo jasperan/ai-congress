@@ -1,7 +1,7 @@
 """
 API request/response schemas (pydantic models).
 """
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 from pydantic import BaseModel
 
 from ..utils.config_loader import load_config
@@ -33,6 +33,19 @@ class ChatRequest(BaseModel):
     document_ids: Optional[List[str]] = None  # Specific documents for RAG
     voting_mode: str = "classic"  # classic | semantic
     inference_backend: str = "ollama"  # ollama | pi | openai
+    triad: Optional[str] = None  # deliberation mode: named triad
+    evidence: Optional[bool] = None  # deliberation mode: web-search evidence rounds
+
+
+class DeliberationRequest(BaseModel):
+    """POST /api/deliberation (4.2.3): run the 3-round council protocol."""
+    question: str
+    triad: Optional[str] = None          # named triad from config/triads.json
+    models: Optional[List[str]] = None   # alternative: build a council from raw models
+    temperature: float = 0.7
+    evidence: Optional[bool] = None      # None -> config.deliberation.evidence_grounded
+    inference_backend: str = "ollama"    # ollama | pi | openai
+    config: Optional[Dict[str, Any]] = None  # per-request DeliberationConfig overrides
 
 
 class EnhancedChatRequest(BaseModel):

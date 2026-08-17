@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Phase 4 — Deliberation exposure
+- **4.2.3 `/api/deliberation` route**: the flagship council mode is now reachable over HTTP (POST /api/deliberation with a `triad` or ≥2 `models`, per-request config overrides, `evidence` rounds). Also wired into `/api/chat` and the `/ws/chat` websocket (mode `deliberation`).
+- **Triad + replay APIs**: `GET /api/triads` and `GET /api/triads/{name}` expose the 20 archetype triads; `GET /api/replays` and `GET /api/replays/{id}` (4.2.2) expose saved debate replays with a formatted timeline.
+- **3.3.1 Round-2 engagement compliance**: the protocol's "engage ≥2 peers by name" rule is now enforced — each Round-2 output is checked against peer name/role tokens, non-compliant members are re-prompted once, and every output carries an `engagement` annotation (compliant / re-prompted / peers engaged) plus a run-level `engagement_compliance` summary.
+- **4.2.1 verdict formatter moved out of `VotingEngine`** (issue #11) into `core/deliberation_verdict.py`; `VotingEngine.deliberation_verdict` remains as a thin delegate.
+- **4.3.2 verdict UI**: new `DeliberationVerdict.svelte` renders the full verdict structure (Question-Reframing Warning, Unresolved Questions, Steelmanned Dissent, Final Positions with evidence-alignment badges, Weighted Majority, debate transcript with per-member engagement chips). ChatInterface gained a deliberation mode with a triad selector and an evidence toggle; the WS `final_answer` payload now carries `verdict` + `data` (rounds/restate/dissent/engagement).
+- **4.4.1 TUI parity**: deliberation added to the TUI's swarm-mode list; `WsChatRequest` carries triad/evidence; the chat dashboard prefers the structured verdict text on final_answer.
+- 18 new unit tests (`tests/test_phase4_deliberation.py`); suite at 593. Live-verified: `/api/deliberation` with the pi backend returns a full verdict with 3/3 engagement compliance.
+
 ### Phase 3 — Learning persistence + model-agnostic bootstrap
 - **3.5.1 live-catalog bootstrap**: `ModelRegistry.list_available_models` now seeds a neutral 0.5 weight for every model actually in Ollama and purges stale benchmark keys (no more learning against model ghosts); `load_benchmark_weights` applies only to installed models. Catalog outages no longer wipe weights.
 - **3.5.2 persisted learning**: dynamic weights, confidence calibration, feedback log, and circuit-breaker state survive restarts via atomic JSON writes under `data/` (`LearningConfig` overrides paths). New shared `utils/persistence.py` (tmp+rename atomic writes).
