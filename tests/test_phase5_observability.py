@@ -193,9 +193,10 @@ class TestObservabilityAPI:
         from src.ai_congress.api.state import get_enhanced_orchestrator
 
         orch = get_enhanced_orchestrator()
-        # Unique domain per run so persisted feedback from previous smoke
+        # Unique domain per process run so persisted feedback from prior
         # runs can never skew the assertion (feedback log is runtime state).
-        domain = "l3-test-domain"
+        import uuid
+        domain = f"l3-test-{uuid.uuid4().hex[:8]}"
         orch.feedback_collector.record_feedback(
             session_id="obs-test", model="phi3:3.8b",
             feedback="positive", response_text="good", domain=domain,
