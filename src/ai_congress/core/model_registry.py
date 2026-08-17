@@ -23,16 +23,24 @@ class ModelRegistry:
         self.weights: Dict[str, float] = {}
 
     async def list_available_models(self) -> List[Dict]:
-        """List all available Ollama models"""
+        """List all available Ollama models.
+
+        Also bootstraps ``weights`` from the live catalog (3.5.1): every
+        model actually present gets at least the neutral 0.5 base weight,
+        and stale benchmark keys for models no longer installed are purged
+        so learning starts on real models instead of ghosts.
+        """
         try:
             models_response = await self.ollama_client.list_models()
             models = []
+            live_names: set[str] = set()
 
             for model in models_response:
                 # ollama>=0.6 dumps the id under 'model' (no computed 'name')
                 model_name = model.get('name') or model.get('model')
                 if not model_name:
                     continue
+                live_names.add(model_name)
                 model_info = {
                     'name': model_name,
                     'size': model.get('size', 0),
@@ -41,6 +49,15 @@ class ModelRegistry:
                 }
                 models.append(model_info)
                 self.models_cache[model_name] = model_info
+                # Neutral bootstrap weight for any live model without one
+                self.weights.setdefault(model_name, 0.5)
+
+            # Drop weights for models no longer in the catalog — only when the
+            # catalog was actually discovered (don't wipe on an Ollama outage).
+            if live_names:
+                self.weights = {
+                    name: w for name, w in self.weights.items() if name in live_names
+                }
 
             logger.info(f"Found {len(models)} available models")
             return models
@@ -73,18 +90,31 @@ class ModelRegistry:
         return self.weights.get(model_name, 0.5)  # Default to 0.5
 
     async def load_benchmark_weights(self, benchmark_file: str):
-        """Load model weights from benchmark file"""
+        """Load model weights from benchmark file.
+
+        Only weights for models present in the live catalog (``models_cache``)
+        are applied — stale benchmark keys for uninstalled models are ignored
+        so they cannot dominate ranking (3.5.1).
+        """
         import json
         try:
             with open(benchmark_file, 'r') as f:
                 benchmarks = json.load(f)
 
+            applied = 0
+            skipped = 0
             for model_name, data in benchmarks.items():
+                if model_name not in self.models_cache:
+                    skipped += 1
+                    continue
                 # Normalize accuracy to 0-1 range
                 accuracy = data.get('accuracy', 0.5)
                 self.set_model_weight(model_name, accuracy)
+                applied += 1
 
-            logger.info(f"Loaded benchmark weights for {len(self.weights)} models")
+            logger.info(
+                f"Loaded benchmark weights: {applied} applied, {skipped} skipped (not installed)"
+            )
 
         except Exception as e:
             logger.warning(f"Could not load benchmark file: {e}")

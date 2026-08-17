@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Phase 3 — Learning persistence + model-agnostic bootstrap
+- **3.5.1 live-catalog bootstrap**: `ModelRegistry.list_available_models` now seeds a neutral 0.5 weight for every model actually in Ollama and purges stale benchmark keys (no more learning against model ghosts); `load_benchmark_weights` applies only to installed models. Catalog outages no longer wipe weights.
+- **3.5.2 persisted learning**: dynamic weights, confidence calibration, feedback log, and circuit-breaker state survive restarts via atomic JSON writes under `data/` (`LearningConfig` overrides paths). New shared `utils/persistence.py` (tmp+rename atomic writes).
+- **3.5.3 feedback→weight bridge**: `record_feedback` now moves the model's dynamic weight with a small EMA delta (positive up / negative down) — the feedback loop finally does something. Feedback entries also carry a `domain` tag (3.5.4) and the `/api/feedback` route accepts it.
+- **3.4.3 circuit-breaker persistence**: OPEN breakers (with failure timestamps) are restored on restart, so a model that hung all day is not retried immediately after every process start; recovery timing is preserved.
+
 ### Phase 2 — Wire dormant intelligence into the enhanced pipeline
 - **3.1.1 reasoning_mode actually changes prompts**: `MODE_INSTRUCTIONS` in `role_prompts.py`; cot/react instructions are appended to the Wave-1 user prompt — routing finally has an effect on output.
 - **3.1.4 AgentMemory into the pipeline**: recall before Wave 1 (top relevant exchanges injected as continuity context), `add_exchange(prompt, winner)` after each run. Gated by `intelligence.memory_enabled`.

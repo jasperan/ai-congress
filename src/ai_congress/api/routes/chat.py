@@ -262,7 +262,11 @@ async def submit_feedback(request: FeedbackRequest):
     """Submit user feedback on a model response."""
     try:
         orch = get_enhanced_orchestrator()
-        orch.record_feedback(request.session_id, request.model, request.feedback)
+        orch.record_feedback(
+            request.session_id, request.model, request.feedback,
+            response_text=request.response_text or "",
+            domain=request.domain or "",
+        )
         event_logger.log("user_feedback",
             session_id=request.session_id,
             model=request.model,

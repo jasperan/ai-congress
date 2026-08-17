@@ -212,6 +212,16 @@ class ImageGenConfig(BaseModel):
     output_dir: str = "static/generated_images"
 
 
+class LearningConfig(BaseModel):
+    """Where the learned/persistent state lives (3.5.2, 3.4.3)."""
+    data_dir: str = "data"
+    weights_file: str = "learning_state_weights.json"
+    calibration_file: str = "learning_state_calibration.json"
+    feedback_file: str = "feedback_log.json"
+    circuit_breaker_file: str = "circuit_breaker.json"
+    feedback_learning_rate_scale: float = 0.25
+
+
 class Config(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
@@ -220,6 +230,7 @@ class Config(BaseModel):
     voting: VotingConfig = Field(default_factory=VotingConfig)
     deliberation: DeliberationConfigModel = Field(default_factory=DeliberationConfigModel)
     intelligence: IntelligenceConfig = Field(default_factory=IntelligenceConfig)
+    learning: LearningConfig = Field(default_factory=LearningConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     models: ModelWeights = Field(default_factory=ModelWeights)
     api: APIConfig = Field(default_factory=APIConfig)

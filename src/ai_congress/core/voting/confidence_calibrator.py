@@ -6,6 +6,9 @@ binned calibration to correct over- or under-confident predictions.
 
 import logging
 from collections import defaultdict
+from typing import Optional
+
+from ...utils.persistence import load_json, save_json
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +23,47 @@ class ConfidenceCalibrator:
     10 equal bins. For each bin the actual accuracy (fraction of correct
     predictions) is tracked. When calibrating a new raw confidence value,
     the bin's empirical accuracy is returned instead of the raw score.
+
+    With ``persist_path`` set, observations are serialized on every
+    record so calibration survives restarts (3.5.2).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, persist_path: Optional[str] = None) -> None:
         # model -> bin_index -> {"correct": int, "total": int}
         self._data: dict[str, dict[int, dict[str, int]]] = defaultdict(
             lambda: defaultdict(lambda: {"correct": 0, "total": 0})
         )
+        self.persist_path = persist_path
+        if persist_path:
+            self._load()
+
+    # ------------------------------------------------------------------
+    # Persistence (3.5.2)
+    # ------------------------------------------------------------------
+
+    def _load(self) -> None:
+        data = load_json(self.persist_path, default=None)
+        if not isinstance(data, dict) or not data.get("data"):
+            return
+        raw = data["data"]
+        if isinstance(raw, dict):
+            for model, bins in raw.items():
+                if not isinstance(bins, dict):
+                    continue
+                for bin_idx, bucket in bins.items():
+                    try:
+                        self._data[model][int(bin_idx)] = {
+                            "correct": int(bucket.get("correct", 0)),
+                            "total": int(bucket.get("total", 0)),
+                        }
+                    except (TypeError, ValueError, AttributeError):
+                        continue
+            logger.info("Loaded confidence calibration from %s", self.persist_path)
+
+    def _save(self) -> None:
+        if not self.persist_path:
+            return
+        save_json(self.persist_path, {"data": dict(self._data)})
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -60,6 +97,7 @@ class ConfidenceCalibrator:
             "Recorded observation for %s: conf=%.2f bin=%d correct=%s",
             model, predicted_confidence, bin_idx, was_correct,
         )
+        self._save()
 
     def calibrate(self, model: str, raw_confidence: float) -> float:
         """Apply calibration curve to a raw confidence value.

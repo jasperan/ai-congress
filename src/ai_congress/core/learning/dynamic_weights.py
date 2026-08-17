@@ -1,7 +1,10 @@
 """Dynamic weight adjustment based on model performance over time."""
 
 import logging
+import os
 from typing import Optional
+
+from ...utils.persistence import load_json, save_json
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +13,9 @@ class DynamicWeightManager:
     """Adjusts model weights dynamically based on win/loss outcomes.
 
     Uses exponential moving average to blend base benchmark weights
-    with observed performance (win rate).
+    with observed performance (win rate). With ``persist_path`` set,
+    weights + outcome history are written to JSON on update so the
+    learned model survives restarts (3.5.2).
     """
 
     def __init__(
@@ -19,6 +24,7 @@ class DynamicWeightManager:
         learning_rate: float = 0.1,
         min_weight: float = 0.1,
         max_weight: float = 1.0,
+        persist_path: Optional[str] = None,
     ):
         """Initialize the dynamic weight manager.
 
@@ -27,6 +33,7 @@ class DynamicWeightManager:
             learning_rate: How fast weights adapt to new outcomes (0-1).
             min_weight: Minimum allowed weight.
             max_weight: Maximum allowed weight.
+            persist_path: Optional JSON file to load/save learning state.
         """
         self.base_weights: dict[str, float] = dict(base_weights) if base_weights else {}
         self.learning_rate = learning_rate
@@ -34,14 +41,43 @@ class DynamicWeightManager:
         self.max_weight = max_weight
         self._current_weights: dict[str, float] = dict(self.base_weights)
         self._outcomes: dict[str, dict[str, int]] = {}  # model -> {wins, total}
+        self.persist_path = persist_path
+        if persist_path:
+            self._load()
+
+    # ------------------------------------------------------------------
+    # Persistence (3.5.2)
+    # ------------------------------------------------------------------
+
+    def _load(self) -> None:
+        """Restore current weights + outcome history from disk."""
+        data = load_json(self.persist_path, default=None)
+        if not isinstance(data, dict):
+            return
+        loaded_base = data.get("base_weights", {})
+        loaded_current = data.get("current_weights", {})
+        loaded_outcomes = data.get("outcomes", {})
+        if isinstance(loaded_base, dict):
+            self.base_weights = {**self.base_weights, **loaded_base}
+        if isinstance(loaded_current, dict):
+            self._current_weights = {**self.base_weights, **loaded_current}
+        if isinstance(loaded_outcomes, dict):
+            self._outcomes = loaded_outcomes
+        if loaded_current:
+            logger.info("Loaded dynamic weights from %s", self.persist_path)
+
+    def _save(self) -> None:
+        """Persist current state to disk (no-op when path unset)."""
+        if not self.persist_path:
+            return
+        save_json(self.persist_path, {
+            "base_weights": self.base_weights,
+            "current_weights": self._current_weights,
+            "outcomes": self._outcomes,
+        })
 
     def record_outcome(self, model: str, was_winner: bool) -> None:
-        """Record a win or loss for a model.
-
-        Args:
-            model: The model identifier.
-            was_winner: True if the model's response was selected as winner.
-        """
+        """Record a win or loss for a model."""
         if model not in self._outcomes:
             self._outcomes[model] = {"wins": 0, "total": 0}
         self._outcomes[model]["total"] += 1
@@ -75,6 +111,26 @@ class DynamicWeightManager:
             )
 
         logger.info("Updated dynamic weights: %s", self._current_weights)
+        self._save()
+
+    def apply_feedback(self, model: str, positive: bool) -> None:
+        """Apply a small EMA delta from user feedback (3.5.3).
+
+        Positive feedback nudges the weight up, negative down, using a
+        fraction of the standard learning rate so single raters cannot
+        swing a model's standing.
+        """
+        if not model:
+            return
+        delta = (self.learning_rate * 0.25) * (1.0 if positive else -1.0)
+        old = self._current_weights.get(model, self.base_weights.get(model, 0.5))
+        new = old + delta
+        self._current_weights[model] = max(self.min_weight, min(self.max_weight, new))
+        logger.info(
+            "Feedback weight %s for %s: %.3f -> %.3f",
+            "boost" if positive else "penalty", model, old, self._current_weights[model],
+        )
+        self._save()
 
     def get_weight(self, model: str) -> float:
         """Get the current adjusted weight for a model.

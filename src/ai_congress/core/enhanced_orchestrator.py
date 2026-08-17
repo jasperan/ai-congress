@@ -14,6 +14,7 @@ Plus the original 8 Symphony/Pi-inspired improvements (ACP, supervision, anchori
 
 import asyncio
 import logging
+import os
 import time
 from typing import Optional
 
@@ -47,7 +48,7 @@ from .intelligence.moe_router import MixtureOfExpertsRouter
 from .intelligence.agent_memory import AgentMemory
 from .learning.prompt_evolution import PromptEvolution
 from .debate.evidence_grounded import EvidenceGroundedDebate
-from ..utils.config_loader import IntelligenceConfig
+from ..utils.config_loader import IntelligenceConfig, LearningConfig
 
 # New module imports - voting
 from .voting.ensemble_voter import EnsembleVoter
@@ -107,6 +108,7 @@ class EnhancedOrchestrator:
         pi_client=None,
         inference_backend: str = "ollama",
         intelligence_config: Optional[IntelligenceConfig] = None,
+        learning_config=None,
     ):
         self.model_registry = model_registry
         self.voting_engine = voting_engine
@@ -117,6 +119,14 @@ class EnhancedOrchestrator:
         self.rag_engine = rag_engine
         self.web_search_engine = web_search_engine
         self.intelligence = intelligence_config or IntelligenceConfig()
+        # Persisted learning state (3.5.2 / 3.4.3): falls back to defaults
+        # when no config is passed; disabled when files are unwritable.
+        learning = learning_config or LearningConfig()
+        self.learning_dir = getattr(learning, "data_dir", "data")
+        self._weights_path = os.path.join(self.learning_dir, getattr(learning, "weights_file", "learning_state_weights.json"))
+        self._calibration_path = os.path.join(self.learning_dir, getattr(learning, "calibration_file", "learning_state_calibration.json"))
+        self._feedback_path = os.path.join(self.learning_dir, getattr(learning, "feedback_file", "feedback_log.json"))
+        self._breaker_path = os.path.join(self.learning_dir, getattr(learning, "circuit_breaker_file", "circuit_breaker.json"))
 
         # ACP infrastructure (original)
         self.registry = AgentRegistry()
@@ -154,7 +164,7 @@ class EnhancedOrchestrator:
 
         # Voting
         self.ensemble_voter = EnsembleVoter(self.voting_engine)
-        self.confidence_calibrator = ConfidenceCalibrator()
+        self.confidence_calibrator = ConfidenceCalibrator(persist_path=self._calibration_path)
         self.minority_report_gen = MinorityReportGenerator()
 
         # Debate
@@ -163,7 +173,7 @@ class EnhancedOrchestrator:
         self.structured_argumentation = StructuredArgumentation()
 
         # Coordination
-        self.circuit_breaker = CircuitBreaker()
+        self.circuit_breaker = CircuitBreaker(persist_path=self._breaker_path)
         self.graceful_degradation = GracefulDegradation()
         self.adaptive_timeout = AdaptiveTimeout()
         self.coalition_formation = CoalitionFormation()
@@ -173,8 +183,11 @@ class EnhancedOrchestrator:
             model_name: self.model_registry.get_model_weight(model_name)
             for model_name in getattr(self.model_registry, "weights", {})
         }
-        self.dynamic_weight_manager = DynamicWeightManager(base_weights=base_weights)
-        self.feedback_collector = FeedbackCollector()
+        self.dynamic_weight_manager = DynamicWeightManager(
+            base_weights=base_weights,
+            persist_path=self._weights_path,
+        )
+        self.feedback_collector = FeedbackCollector(persist_path=self._feedback_path)
         self.personality_persistence = PersonalityPersistence()
 
         # RAG (optional)
@@ -1027,18 +1040,39 @@ class EnhancedOrchestrator:
             "mission_active": self.goal_engine is not None,
         }
 
-    def record_feedback(self, session_id: str, model: str, feedback: str) -> None:
+    def record_feedback(
+        self, session_id: str, model: str, feedback: str,
+        response_text: str = "", domain: str = "",
+    ) -> None:
         """Record user feedback for a model response.
+
+        Beyond logging, positive/negative feedback is bridged into the
+        dynamic weight manager as a small EMA delta, so the feedback loop
+        actually moves model standings (3.5.3). Domain is stored alongside
+        for domain-specific learning later (3.5.4).
 
         Args:
             session_id: The session identifier (typically run_id).
             model: The model identifier.
             feedback: Either 'positive' or 'negative'.
+            response_text: Optional response text for context.
+            domain: Optional query domain tag (e.g. "factual").
         """
         try:
-            self.feedback_collector.record_feedback(session_id, model, feedback)
+            self.feedback_collector.record_feedback(
+                session_id, model, feedback, response_text, domain,
+            )
         except Exception as e:
             logger.warning("Failed to record feedback: %s", e)
+
+        # Bridge into the weight update path (3.5.3): a small EMA delta.
+        if feedback in ("positive", "negative") and model:
+            try:
+                self.dynamic_weight_manager.apply_feedback(
+                    model, positive=(feedback == "positive")
+                )
+            except Exception as e:
+                logger.warning("Failed to apply feedback weight delta: %s", e)
 
     def get_performance_stats(self) -> dict:
         """Return combined performance statistics from weight manager and calibrator.

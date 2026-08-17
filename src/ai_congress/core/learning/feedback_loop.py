@@ -4,15 +4,34 @@ import logging
 import time
 from typing import Optional
 
+from ...utils.persistence import load_json, save_json
+
 logger = logging.getLogger(__name__)
 
 
 class FeedbackCollector:
-    """Collects user feedback on model responses and computes approval-based weight modifiers."""
+    """Collects user feedback on model responses and computes approval-based weight modifiers.
 
-    def __init__(self) -> None:
+    With ``persist_path`` set the feedback log is written on every record
+    so the loop survives restarts (3.5.3).
+    """
+
+    def __init__(self, persist_path: Optional[str] = None) -> None:
         """Initialize the feedback collector."""
         self._feedback: list[dict] = []
+        self.persist_path = persist_path
+        if persist_path:
+            self._load()
+
+    def _load(self) -> None:
+        data = load_json(self.persist_path, default=None)
+        if isinstance(data, list):
+            self._feedback = data
+
+    def _save(self) -> None:
+        if not self.persist_path:
+            return
+        save_json(self.persist_path, self._feedback)
 
     def record_feedback(
         self,
@@ -20,6 +39,7 @@ class FeedbackCollector:
         model: str,
         feedback: str,
         response_text: str = "",
+        domain: str = "",
     ) -> None:
         """Record user feedback for a model response.
 
@@ -28,6 +48,8 @@ class FeedbackCollector:
             model: The model identifier.
             feedback: Either 'positive' or 'negative'.
             response_text: Optional response text for context.
+            domain: Optional query domain tag (3.5.4) so weight updates can
+                be domain-specific later.
         """
         if feedback not in ("positive", "negative"):
             logger.warning("Invalid feedback value: %s (expected 'positive' or 'negative')", feedback)
@@ -38,9 +60,11 @@ class FeedbackCollector:
             "model": model,
             "feedback": feedback,
             "response_text": response_text,
+            "domain": domain,
             "timestamp": time.time(),
         }
         self._feedback.append(entry)
+        self._save()
         logger.debug("Recorded %s feedback for model %s in session %s", feedback, model, session_id)
 
     def get_model_feedback_stats(self, model: str) -> dict:

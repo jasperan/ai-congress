@@ -1,3 +1,9 @@
+# Runtime-generated state (learned weights, calibration, feedback, breakers)
+data/learning_state_weights.json
+data/learning_state_calibration.json
+data/feedback_log.json
+data/circuit_breaker.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

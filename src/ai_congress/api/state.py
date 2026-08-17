@@ -73,6 +73,7 @@ def get_enhanced_orchestrator() -> EnhancedOrchestrator:
             pi_client=swarm.pi_client,
             inference_backend=swarm.inference_backend,
             intelligence_config=getattr(config, "intelligence", None),
+            learning_config=getattr(config, "learning", None),
         )
 
         # Wire precedent store if Oracle is available

@@ -52,6 +52,7 @@ class FeedbackRequest(BaseModel):
     model: str
     feedback: str  # "positive" or "negative"
     response_text: Optional[str] = None
+    domain: Optional[str] = None  # query domain tag (3.5.4)
 
 
 class ModelInfo(BaseModel):
