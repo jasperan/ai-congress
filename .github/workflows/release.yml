@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (vX.Y.Z)"
+        required: false
+        default: "v0.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build TUI binaries
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: congress-tui-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: congress-tui-linux-aarch64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: congress-tui-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: congress-tui-macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tui-rs
+
+      - name: Build (native target)
+        working-directory: tui-rs
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: tui-rs/target/${{ matrix.target }}/release/congress-tui
+          if-no-files-found: error
+
+      - name: Create a tarball for easier consumption
+        working-directory: tui-rs/target/${{ matrix.target }}/release
+        run: |
+          tar -czf ${{ matrix.artifact }}.tar.gz congress-tui
+          sha256sum ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Upload tarball + checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-tarball
+          path: |
+            tui-rs/target/${{ matrix.target }}/release/${{ matrix.artifact }}.tar.gz
+            tui-rs/target/${{ matrix.target }}/release/${{ matrix.artifact }}.tar.gz.sha256
+
+  backend:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ".[dev]"
+      - name: Unit tests
+        run: .venv/bin/python -m pytest tests/ -m unit -q -p no:cacheprovider
+
+  release:
+    name: Publish GitHub Release
+    needs: [build, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: false
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: AI Congress ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/*/**/*.tar.gz
+            dist/*/**/*.sha256

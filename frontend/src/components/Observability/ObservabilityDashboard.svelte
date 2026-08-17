@@ -15,9 +15,35 @@
   $: calibration = summary?.calibration || {}
   $: runs = summary?.recent_runs || []
   $: eventLogger = summary?.event_logger || {}
+  $: calibrationCurves = summary?.calibration_curves || []
+  $: domainWinRates = summary?.domain_win_rates || []
+  $: moeRouting = summary?.moe_routing || {}
+  $: moeEntries = typeof moeRouting === 'object' && moeRouting !== null ? Object.entries(moeRouting) : []
 
   $: maxWeight = Math.max(0.01, ...leaderboard.map(r => r.weight || 0))
   $: maxParticipation = Math.max(1, ...leaderboard.map(r => r.participations || 0))
+  $: maxDomainFeedback = Math.max(1, ...domainWinRates.map(d => d.feedback_count || 0))
+
+  // SVG calibration curve geometry — clip accuracy dots into the visible band
+  function curvePoints(points, w = 180, h = 44) {
+    if (!points || points.length === 0) return ''
+    const maxX = points.length > 1 ? points.length - 1 : 1
+    return points
+      .map((p, i) => {
+        const x = 4 + (i / maxX) * (w - 8)
+        const y = h - 4 - (Math.min(1, Math.max(0, p.accuracy || 0)) * (h - 8))
+        return `${x.toFixed(1)},${y.toFixed(1)}`
+      })
+      .join(' ')
+  }
+
+  // Per-model calibration digest for the simple list (bin rows → obs + accuracy)
+  function calibrationSummary(model) {
+    const bins = Object.entries((calibration || {})[model] || {})
+    const obs = bins.reduce((acc, [, b]) => acc + Number(b?.total || 0), 0)
+    const correct = bins.reduce((acc, [, b]) => acc + Number(b?.correct || 0), 0)
+    return { obs, acc: obs > 0 ? correct / obs : 0 }
+  }
 
   function statusColor(state) {
     return {
@@ -160,14 +186,95 @@
         {#if Object.keys(calibration).length === 0}
           <p class="text-sm text-text-secondary dark:text-text-tertiary">No calibration observations yet.</p>
         {:else}
-          {#each Object.entries(calibration) as [model, stats]}
+          {#each Object.entries(calibration) as [model]}
+            {@const s = calibrationSummary(model)}
             <div class="flex items-center justify-between gap-3">
               <p class="text-sm font-medium text-text-primary dark:text-text-primary truncate">{model}</p>
-              <span class="text-xs text-text-secondary dark:text-text-tertiary whitespace-nowrap">{stats.observations || 0} obs</span>
+              <div class="flex items-center gap-2">
+                {#if s.obs > 0}<span class="text-[11px] text-text-tertiary">{Math.round(s.acc * 100)}% acc</span>{/if}
+                <span class="text-xs text-text-secondary dark:text-text-tertiary whitespace-nowrap">{s.obs} obs</span>
+              </div>
             </div>
           {/each}
         {/if}
       </div>
+    </div>
+
+    <!-- L3: Calibration curves + MoE routing -->
+    <div class="grid lg:grid-cols-2 gap-6">
+      <!-- Calibration curves -->
+      <div class="card p-4 space-y-3">
+        <h3 class="text-sm font-bold text-text-primary dark:text-text-primary">📐 Calibration Curves</h3>
+        <p class="text-xs text-text-secondary dark:text-text-tertiary">Observed accuracy per reported-confidence bin (points = bins, height = accuracy).</p>
+        {#if calibrationCurves.length === 0}
+          <p class="text-sm text-text-secondary dark:text-text-tertiary">No calibrated observations yet — confidence never calibrated if a bin is thin.</p>
+        {:else}
+          {#each calibrationCurves as curve}
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-medium text-text-primary dark:text-text-primary truncate">{curve.model}</p>
+                <p class="text-[11px] text-text-tertiary">{curve.points.length} bins</p>
+              </div>
+              <svg viewBox="0 0 180 44" class="w-full h-11" preserveAspectRatio="none">
+                <line x1="4" y1="40" x2="176" y2="40" stroke="currentColor" class="text-surface-300 dark:text-surface-600" stroke-width="1" />
+                <polyline points={curvePoints(curve.points)} fill="none" stroke="#3b82f6" stroke-width="1.5" />
+                {#each curve.points as p, i}
+                  {@const last = i === curve.points.length - 1}
+                  <circle cx={String(4 + (i / Math.max(1, curve.points.length - 1)) * 172)} cy={String(40 - Math.min(1, Math.max(0, p.accuracy || 0)) * 36)} r="2" fill={last ? '#22c55e' : '#3b82f6'}>
+                    <title>{(p.bin || '')}: {Math.round((p.accuracy || 0) * 100)}% (n={p.n})</title>
+                  </circle>
+                {/each}
+              </svg>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <!-- MoE routing -->
+      <div class="card p-4 space-y-3">
+        <h3 class="text-sm font-bold text-text-primary dark:text-text-primary">🧭 MoE Routing</h3>
+        {#if moeEntries.length === 0}
+          <p class="text-sm text-text-secondary dark:text-text-tertiary">No routing statistics yet.</p>
+        {:else}
+          {#each moeEntries as [route, count]}
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-sm font-medium text-text-primary dark:text-text-primary truncate font-mono text-xs">{route}</p>
+              <span class="text-xs text-text-secondary dark:text-text-tertiary">{count}</span>
+            </div>
+          {/each}
+        {/if}
+      </div>
+    </div>
+
+    <!-- L3: Domain win rates -->
+    <div class="card p-4 space-y-3">
+      <h3 class="text-sm font-bold text-text-primary dark:text-text-primary">🎯 Domain Win Rates</h3>
+      {#if domainWinRates.length === 0}
+        <p class="text-sm text-text-secondary dark:text-text-tertiary">No domain-tagged feedback yet — send feedback with a domain to populate this.</p>
+      {:else}
+        {#each domainWinRates as d}
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-medium text-text-primary dark:text-text-primary">{d.domain}</p>
+              <p class="text-xs text-text-secondary dark:text-text-tertiary">
+                {d.feedback_count} ratings · {Math.round(d.win_rate * 100)}% positive
+              </p>
+            </div>
+            <div class="h-2 rounded bg-surface-100 dark:bg-surface-800 overflow-hidden">
+              <div class="h-full rounded bg-gradient-to-r from-success-500 to-primary-500" style="width: {Math.max(0, d.win_rate * 100)}%"></div>
+            </div>
+            {#if (d.top_models || []).length > 0}
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                {#each d.top_models as m}
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border border-surface-200 dark:border-surface-700 text-text-secondary dark:text-text-tertiary">
+                    {m.model} · {Math.round(m.win_rate * 100)}% ({m.positive}/{m.positive + m.negative})
+                  </span>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      {/if}
     </div>
 
     <!-- Recent runs -->

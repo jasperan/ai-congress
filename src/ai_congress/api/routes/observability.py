@@ -100,6 +100,74 @@ async def observability_summary():
     except Exception as e:
         summary["moe_routing"] = {}
 
+    # --- Calibration curves (dashboard L3): per-model confidence bins ---
+    try:
+        curves = []
+        for model, bins in (orch.confidence_calibrator.get_all_stats() or {}).items():
+            points = []
+            for bin_idx, b in sorted(bins.items(), key=lambda kv: int(kv[0])):
+                lo, hi = b["bin_range"]
+                points.append({
+                    "bin": f"{lo:.2f}-{hi:.2f}",
+                    "bin_center": (lo + hi) / 2,
+                    "accuracy": b["accuracy"],
+                    "n": b["total"],
+                })
+            if points:
+                curves.append({"model": model, "points": points})
+        summary["calibration_curves"] = curves
+    except Exception as e:
+        logger.warning("Calibration curves failed: %s", e)
+        summary["calibration_curves"] = []
+
+    # --- Per-domain win rates (dashboard L3): feedback log grouped by
+    #     domain tag (3.5.4) × model ---
+    try:
+        domains: dict[str, dict] = {}
+        for entry in orch.feedback_collector.get_all_feedback():
+            domain = entry.get("domain") or "general"
+            model = entry.get("model", "?")
+            bucket = domains.setdefault(
+                domain, {"positive": 0, "negative": 0, "by_model": {}}
+            )
+            if entry.get("feedback") == "positive":
+                bucket["positive"] += 1
+            else:
+                bucket["negative"] += 1
+            mb = bucket["by_model"].setdefault(model, {"positive": 0, "negative": 0})
+            if entry.get("feedback") == "positive":
+                mb["positive"] += 1
+            else:
+                mb["negative"] += 1
+        domain_rows = []
+        for domain, bucket in sorted(domains.items()):
+            total = bucket["positive"] + bucket["negative"]
+            models_ranked = sorted(
+                bucket["by_model"].items(),
+                key=lambda kv: (kv[1]["positive"] - kv[1]["negative"]),
+                reverse=True,
+            )[:5]
+            domain_rows.append({
+                "domain": domain,
+                "feedback_count": total,
+                "win_rate": (bucket["positive"] / total) if total else 0.0,
+                "top_models": [
+                    {
+                        "model": m,
+                        "positive": s["positive"],
+                        "negative": s["negative"],
+                        "win_rate": (s["positive"] / (s["positive"] + s["negative"]))
+                        if (s["positive"] + s["negative"])
+                        else 0.0,
+                    }
+                    for m, s in models_ranked
+                ],
+            })
+        summary["domain_win_rates"] = domain_rows
+    except Exception as e:
+        logger.warning("Domain win rates failed: %s", e)
+        summary["domain_win_rates"] = []
+
     return summary
 
 

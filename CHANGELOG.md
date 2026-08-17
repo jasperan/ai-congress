@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Phase 7 — Strategic
+- **3.1.9 MemGPT-style memory**: `AgentMemory` now persists short/long-term memory to `data/agent_memory.json` (atomic writes, restore-on-init) and pages long-term semantic recall through the Oracle precedent store when available — the optimizer recalls prior rulings for paraphrased queries it would previously have missed. Recall is awaited in the wave pipeline; degrades fully to in-context working memory without a file or Oracle.
+- **3.2.7 bargaining consensus**: new `core/negotiation/` — mediator-guided ECON-style negotiation. Members post POSITION+INSISTENCE each round; a deterministic mediator blends proposals by a utility heuristic built from mission priority weights; insistence decays until convergence (≥0.75) or the round cap (≤5). Opt-in per request: `run_cli.py bargain` or `POST /api/bargaining` (works with ollama / pi / openai backends).
+- **4.7.6 release workflow**: `.github/workflows/release.yml` — tag-triggered (`v*`), 4-target cargo build matrix (linux/macos × x86_64/aarch64), tarballs + sha256, backend unit-test gate, GitHub Release with auto-generated notes.
+- **4.4.6 TUI split**: `tui-rs/src/screens/simulation.rs` (2,207 lines) mechanically split into `sim_phases.rs`, `sim_network.rs`, `sim_amendments.rs`, `sim_sentiment.rs` (plus focused unit tests for the extracted pure helpers) — zero behavior change, `cargo build --release` + `cargo test` green.
+- **3.7.5 dashboard L3**: `/api/observability/summary` now returns `calibration_curves` (per-model confidence-bin accuracy, ready for SVG), `domain_win_rates` (feedback aggregated by domain tag × model), and existing MoE routing; the frontend Control Room renders the SVG calibration curves, domain win-rate bars with per-model chips, and the MoE routing list.
+
 ### Phase 6 — Evals & hardening
 - **3.5.6 offline eval harness**: new `utils/evals.py` — curated 8-question set with ground-truth keys, semantic scoring (embedding when available, lexical otherwise), parallel execution, JSON report artifact (`data/evals/eval_report.json`), and `compute_benchmark_update()` that folds measured accuracies back into `config/models_benchmark.json` (EMA blend, never clobbers). New `run_cli.py eval` command (`--model`, `--update-benchmark`, `--questions`).
 - **4.6.7 evals-as-tests**: `tests/test_phase6_hardening.py` runs the harness hermetically with a deterministic fake client (success/timeout/error), asserting report shape and the benchmark blend math.

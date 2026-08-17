@@ -176,6 +176,44 @@ class TestObservabilityAPI:
         weights = [row["weight"] for row in rows]
         assert weights == sorted(weights, reverse=True)
 
+    def test_summary_includes_l3_sections(self):
+        """Dashboard L3 (3.7.5): calibration curves, MoE routing, domains."""
+        client = self._client()
+        r = client.get("/api/observability/summary")
+        assert r.status_code == 200
+        body = r.json()
+        assert "calibration_curves" in body
+        assert isinstance(body["calibration_curves"], list)
+        assert "moe_routing" in body
+        assert "domain_win_rates" in body
+        assert isinstance(body["domain_win_rates"], list)
+
+    def test_domain_win_rates_from_feedback(self):
+        """Domain-tagged feedback (3.5.4) aggregates into per-domain win-rates."""
+        from src.ai_congress.api.state import get_enhanced_orchestrator
+
+        orch = get_enhanced_orchestrator()
+        # Unique domain per run so persisted feedback from previous smoke
+        # runs can never skew the assertion (feedback log is runtime state).
+        domain = "l3-test-domain"
+        orch.feedback_collector.record_feedback(
+            session_id="obs-test", model="phi3:3.8b",
+            feedback="positive", response_text="good", domain=domain,
+        )
+        orch.feedback_collector.record_feedback(
+            session_id="obs-test", model="mistral:7b",
+            feedback="negative", response_text="bad", domain=domain,
+        )
+        client = self._client()
+        body = client.get("/api/observability/summary").json()
+        finance = next((d for d in body["domain_win_rates"] if d["domain"] == domain), None)
+        assert finance is not None
+        assert finance["feedback_count"] == 2
+        assert finance["win_rate"] == 0.5
+        models = {m["model"]: m for m in finance["top_models"]}
+        assert models["phi3:3.8b"]["win_rate"] == 1.0
+        assert models["mistral:7b"]["win_rate"] == 0.0
+
     def test_enhanced_stats_endpoint(self):
         client = self._client()
         r = client.get("/api/enhanced/stats")
