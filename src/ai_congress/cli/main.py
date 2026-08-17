@@ -26,6 +26,7 @@ from ..core.triads import (
 )
 from ..utils.config_loader import load_config
 from ..utils.evals import EVAL_SET, run_evals, summarize, compute_benchmark_update
+from ..core.negotiation import BargainingSession
 from ..tui.theme import PI_THEME, PI_COLORS, EVENT_ICONS
 from ..tui.components import (
     dynamic_border,
@@ -331,6 +332,60 @@ def eval_command(
                 console.print(f"  {model}: {u['old']:.3f} -> {u['new']:.3f}")
         else:
             console.print("[pi.dim]Use --update-benchmark to fold these scores into models_benchmark.json.[/pi.dim]")
+
+    asyncio.run(run())
+
+
+@app.command("bargain")
+def bargain_command(
+    question: str = typer.Argument(..., help="The high-stakes question to negotiate"),
+    models_opt: Optional[str] = typer.Option(None, "--model", "-m", help="Comma-separated models to negotiate with (default: preferred models)"),
+    max_rounds: int = typer.Option(3, "--rounds", help="Max bargaining rounds (1-5)"),
+    priority: Optional[str] = typer.Option(None, "--priority", help="Comma-separated priority labels, e.g. 'cost,safety,speed' (mission utility weights)"),
+):
+    """Mediator-guided bargaining consensus for high-stakes questions (3.2.7).
+
+    Models propose positions, a deterministic mediator blends them by
+    utility, and insistence decays each round until convergence or the
+    round cap — opt-in per request, more deliberative than a vote.
+    """
+    async def run():
+        from ..core.negotiation import BargainingSession
+        from ..utils.evals import _AdaptedClient  # reuse the signature-normalizing adapter
+
+        available = await model_registry.list_available_models()
+        live = [m["name"] for m in available]
+        if models_opt:
+            requested = [m.strip() for m in models_opt.split(",") if m.strip()]
+        else:
+            requested = _default_models()
+        models = [m for m in requested if m in live] or requested
+        agents = [{"name": f"member_{i}", "model": m} for i, m in enumerate(models, 1)]
+
+        priority_weights = {}
+        if priority:
+            for i, label in enumerate(priority.split(",")):
+                priority_weights[label.strip()] = max(0.1, 1.0 - i * 0.2)
+
+        session = BargainingSession(
+            client=_AdaptedClient(swarm.ollama_client),
+            priority_weights=priority_weights,
+            max_rounds=max_rounds,
+        )
+        console.print(f"[bold]Bargaining over {len(agents)} members…[/bold]")
+        result = await session.negotiate(agents, question)
+
+        compromise = result["consensus"] or {}
+        console.print(Panel(
+            compromise.get("text", "(no consensus)"),
+            title="Mediated Compromise",
+            border_style="pi.border",
+        ))
+        console.print(f"Convergence: {compromise.get('convergence', 0):.2f}  "
+                      f"Settled: {'yes' if result['settled'] else 'no (round cap reached)'}  "
+                      f"({result['duration_s']}s)")
+        for i, r in enumerate(result["rounds"], 1):
+            console.print(f"[pi.dim]Round {i}: {len(r['proposals'])} proposals -> convergence {r['compromise']['convergence']:.2f}[/pi.dim]")
 
     asyncio.run(run())
 

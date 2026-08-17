@@ -37,6 +37,7 @@ from .routes import personalities as personalities_routes
 from .routes import precedents as precedents_routes
 from .routes import search as search_routes
 from .routes import voice as voice_routes
+from .routes import bargaining as bargaining_routes
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,7 @@ app.include_router(search_routes.router)
 app.include_router(images_routes.router)
 app.include_router(precedents_routes.router)
 app.include_router(voice_routes.router)
+app.include_router(bargaining_routes.router)
 
 # ── Lifecycle ───────────────────────────────────────────────────────────
 

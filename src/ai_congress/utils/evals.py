@@ -101,10 +101,22 @@ class _AdaptedClient:
     async def generate(self, *, prompt: str, model: str, stream: bool = False, temperature: float = 0.3):
         try:
             return await self._c.generate(prompt=prompt, model=model, stream=stream, temperature=temperature)
-        except TypeError:
-            return await self._c.generate(
-                model=model, prompt=prompt, options={"temperature": temperature}, stream=stream
-            )
+        except (TypeError, AttributeError):
+            try:
+                return await self._c.generate(
+                    model=model, prompt=prompt, options={"temperature": temperature}, stream=stream
+                )
+            except AttributeError:
+                # OpenAI-compatible clients expose chat() with messages instead
+                result = await self._c.chat(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    options={"temperature": temperature},
+                    stream=stream,
+                )
+                if isinstance(result, dict) and "message" in result:
+                    return {"response": result["message"].get("content", "")}
+                return result
 
 
 def _score_response(response: str, ground_truth: str, keywords: List[str]) -> float:

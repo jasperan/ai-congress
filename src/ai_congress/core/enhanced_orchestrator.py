@@ -157,8 +157,15 @@ class EnhancedOrchestrator:
         self.reasoning_router = ReasoningRouter()
         self.query_classifier = QueryClassifier()
         self.moe_router = MixtureOfExpertsRouter()
-        # Cross-run memory: recall before Wave 1, add_exchange after the run
-        self.agent_memory = AgentMemory() if self.intelligence.memory_enabled else None
+        # Cross-run memory: recall before Wave 1, add_exchange after the run.
+        # 3.1.9: persisted to a JSON file (short-term) + semantic long-term
+        # recall via the precedent store when Oracle is available.
+        self.agent_memory = None
+        if self.intelligence.memory_enabled:
+            self.agent_memory = AgentMemory(
+                persist_path=os.path.join(self.learning_dir, "agent_memory.json"),
+                precedent_store=getattr(self, "precedent_store", None),
+            )
         # A/B prompt template evolution for debate instructions
         self.prompt_evolution = PromptEvolution() if self.intelligence.prompt_evolution else None
 
@@ -544,7 +551,7 @@ class EnhancedOrchestrator:
         memory_context = ""
         if self.agent_memory is not None:
             try:
-                memory_context = self.agent_memory.build_memory_context(prompt)
+                memory_context = await self.agent_memory.build_memory_context(prompt)
                 if memory_context:
                     run.log_event("MEMORY_RECALL", detail="relevant past exchanges injected")
             except Exception as e:

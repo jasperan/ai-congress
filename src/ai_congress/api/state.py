@@ -90,6 +90,9 @@ def get_enhanced_orchestrator() -> EnhancedOrchestrator:
             try:
                 embedder = get_embedding_generator()
                 enhanced_orchestrator.precedent_store = PrecedentStore(oracle_pool, embedder)
+                # 3.1.9: memory's semantic long-term recall pages through it
+                if enhanced_orchestrator.agent_memory is not None:
+                    enhanced_orchestrator.agent_memory.precedent_store = enhanced_orchestrator.precedent_store
                 logger.info("Precedent store initialized (stare decisis enabled)")
             except Exception as e:
                 logger.warning("Precedent store init failed (stare decisis disabled): %s", e)

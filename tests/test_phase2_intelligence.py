@@ -148,7 +148,7 @@ class TestInitialResponseWave:
         run = _make_run()
         memory = AgentMemory()
         memory.add_exchange("What is the capital of France?", "Paris is the capital.")
-        ctx = memory.build_memory_context("capital of France")
+        ctx = asyncio.run(memory.build_memory_context("capital of France"))
         self._wave(runtime, run, memory_context=ctx)
         prompt = runtime.supervisor.calls[0]["prompt"]
         assert "Paris is the capital." in prompt
@@ -162,20 +162,20 @@ class TestAgentMemoryRecall:
     def test_add_and_recall(self):
         m = AgentMemory()
         m.add_exchange("What is the capital of France?", "Paris is the capital.")
-        recalled = m.recall_relevant("capital of France", top_k=1)
+        recalled = asyncio.run(m.recall_relevant("capital of France", top_k=1))
         assert recalled and recalled[0]["response"] == "Paris is the capital."
         assert recalled[0]["source"] in ("short_term", "long_term")
 
     def test_build_memory_context_format(self):
         m = AgentMemory()
         m.add_exchange("Explain transformers", "Attention is all you need.")
-        ctx = m.build_memory_context("explain transformers")
+        ctx = asyncio.run(m.build_memory_context("explain transformers"))
         assert "Relevant past exchanges" in ctx
         assert "Attention is all you need" in ctx
 
     def test_no_relevant_memory_returns_empty(self):
         m = AgentMemory()
-        assert m.build_memory_context("totally unrelated topic") == ""
+        assert asyncio.run(m.build_memory_context("totally unrelated topic")) == ""
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ data/feedback_log.json
 data/circuit_breaker.json
 # Event-logger JSONL fallback (3.7.4) when Oracle is unavailable
 data/events/
+# MemGPT-style short-term memory persistence (3.1.9)
+data/agent_memory.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
