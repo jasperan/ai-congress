@@ -6,8 +6,16 @@ from src.ai_congress.core.swarm_orchestrator import SwarmOrchestrator
 
 
 class TestPiBackendConfig:
-    def test_pi_defaults(self):
-        """Defaults point at opencode-go / deepseek-v4-flash."""
+    def test_pi_defaults(self, monkeypatch):
+        """Defaults point at opencode-go / deepseek-v4-flash.
+
+        Hermetic against PI_* overrides: config_loader honours PI_MODEL /
+        PI_BASE_URL from the environment, and PI_MODEL is also used by unrelated
+        tooling (e.g. the pi coding agent sets PI_MODEL), which would otherwise
+        leak into this assertion.
+        """
+        monkeypatch.delenv("PI_MODEL", raising=False)
+        monkeypatch.delenv("PI_BASE_URL", raising=False)
         c = load_config()
         assert c.pi.base_url == "https://opencode.ai/zen/go/v1"
         assert c.pi.model == "deepseek-v4-flash"
