@@ -1,7 +1,6 @@
 """
 Model Registry - Manages Ollama models and their performance metrics
 """
-import asyncio
 from typing import List, Dict, Optional
 from .ollama_client import OllamaClient
 from ..utils.config_loader import OllamaConfig

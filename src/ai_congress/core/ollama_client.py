@@ -1,7 +1,6 @@
 """
 Ollama Client - Wrapper for Ollama API interactions
 """
-import asyncio
 from typing import Dict, List, Optional, Any
 import ollama
 import logging

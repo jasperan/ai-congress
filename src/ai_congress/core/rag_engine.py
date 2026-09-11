@@ -4,7 +4,6 @@ Orchestrates document processing, embedding, storage, and retrieval
 """
 import logging
 from typing import List, Dict, Any, Optional
-import os
 from pathlib import Path
 import asyncio
 

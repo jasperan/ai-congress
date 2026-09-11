@@ -1,7 +1,6 @@
 """Dynamic weight adjustment based on model performance over time."""
 
 import logging
-import os
 from typing import Optional
 
 from ...utils.persistence import load_json, save_json

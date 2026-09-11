@@ -5,7 +5,6 @@ Every function takes a Rich Console as its first argument and renders
 directly -- no return values, no retained state.
 """
 
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
