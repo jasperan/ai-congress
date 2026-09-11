@@ -4,6 +4,7 @@ Uvicorn Server Launcher with Verbose Logging
 Runs the AI Congress API with detailed request/response logging
 """
 import logging
+import os
 import sys
 import uvicorn
 
@@ -30,8 +31,13 @@ if __name__ == "__main__":
     
     uvicorn.run(
         "src.ai_congress.api.main:app",
-        host="0.0.0.0",
-        port=8000,
+        # Default to loopback. This API has no authentication unless
+        # SecurityConfig.api_key_enabled is turned on with a key, and it exposes
+        # model execution endpoints. Binding every interface by default would
+        # publish those endpoints to the network unauthenticated. Set
+        # AI_CONGRESS_HOST explicitly to expose it on purpose.
+        host=os.environ.get("AI_CONGRESS_HOST", "127.0.0.1"),
+        port=int(os.environ.get("AI_CONGRESS_PORT", "8000")),
         reload=True,
         log_level="debug",  # Set uvicorn log level to debug
         access_log=True,    # Enable access logs

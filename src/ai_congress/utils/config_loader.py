@@ -116,7 +116,11 @@ class ModelWeights(BaseModel):
 
 
 class APIConfig(BaseModel):
-    host: str = "0.0.0.0"
+    # NOTE: this field is currently not read anywhere (the server is bound in
+    # run_server.py instead), so it does not control the listen address.
+    # Kept at loopback so that wiring it up later cannot silently expose the
+    # unauthenticated API.
+    host: str = "127.0.0.1"
     port: int = 8000
     reload: bool = True
     workers: int = 4
