@@ -6,6 +6,7 @@ Enhanced with intelligent caching and batch operations optimization
 """
 import logging
 import oracledb
+import re
 from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
 from datetime import datetime
@@ -85,6 +86,26 @@ class EmbeddingCache:
         self.misses = 0
 
 
+_ORACLE_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
+
+
+def _validate_identifier(name: str, kind: str = "identifier") -> str:
+    """Return ``name`` when it is a safe Oracle identifier, else raise.
+
+    ``vector_table`` is interpolated directly into DDL/DML both as an
+    identifier (``CREATE TABLE {name}``, ``INSERT INTO {name}``) and inside a
+    string literal (``UPPER('{name}')``). Without validation that is SQL
+    injection. Oracle identifiers must start with a letter and may otherwise
+    contain letters, digits, underscore, ``$`` or ``#`` (128 chars on 12.2+).
+    """
+    if not isinstance(name, str) or not _ORACLE_IDENTIFIER.match(name):
+        raise ValueError(
+            f"invalid Oracle {kind}: {name!r}; expected a letter followed by "
+            "letters, digits, underscore, $ or #"
+        )
+    return name
+
+
 class OracleVectorStore:
     """Oracle Database Vector Store for embeddings and similarity search with intelligent caching"""
 
@@ -120,7 +141,7 @@ class OracleVectorStore:
         self.password = password
         self.dsn = dsn
         self.use_tls = use_tls
-        self.vector_table = vector_table
+        self.vector_table = _validate_identifier(vector_table, "vector table name")
         self.embedding_dimension = embedding_dimension
         self.batch_size = batch_size
         self.connection = None
