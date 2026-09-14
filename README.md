@@ -33,6 +33,21 @@ AI Congress is an autonomous LLM multi-agent system where different LLMs collabo
 
 ## Screenshots
 
+### The deliberation workspace
+
+A civic, editorial model chamber with an explicit council selection, coordinated light/dark themes, and responsive model controls. Streaming prompts are queued until connected and are never silently replayed after interruption.
+
+![AI Congress model chamber](docs/visuals/desktop.jpg)
+
+<details><summary>Light theme · mobile chamber</summary>
+
+![AI Congress light theme](docs/visuals/light.jpg)
+<img src="docs/visuals/mobile.jpg" alt="AI Congress responsive model chamber" width="320">
+
+</details>
+
+Actual browser captures with three fixture model records; no live deliberation or inference is represented. [Visual notes](docs/visuals/README.md).
+
 ### Terminal UI (Rust)
 
 | Splash Screen | Model Picker | Mode Select |

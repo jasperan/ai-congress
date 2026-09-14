@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy } from 'svelte'
   import ModelResponse from '../Models/ModelResponse.svelte'
   import VoteBreakdown from '../Voting/VoteBreakdown.svelte'
   import DeliberationVerdict from './DeliberationVerdict.svelte'
@@ -27,6 +28,7 @@
   let streamingMessage = null
   let stageEvents = []
   let socketStatus = ''
+  onDestroy(() => websocket?.close())
 
   // New feature toggles
   let useRAG = false

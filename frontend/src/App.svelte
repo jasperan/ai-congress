@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte'
+  import AssemblyHeader from './components/AssemblyHeader.svelte'
+  import './styles/assembly.css'
   import ChatInterface from './components/Chat/ChatInterface.svelte'
   import PersonalityChat from './components/Personality/PersonalityChat.svelte'
   import ObservabilityDashboard from './components/Observability/ObservabilityDashboard.svelte'
@@ -59,7 +61,7 @@
   Fonts load in index.html only (single source of truth).
 -->
 
-<div class="min-h-[100dvh] bg-capitol-50 dark:bg-capitol-950 transition-colors duration-500 font-sans">
+<div class="congress-shell min-h-[100dvh] bg-capitol-50 dark:bg-capitol-950 transition-colors duration-500 font-sans">
   <!-- Skip to content -->
   <a href="#main-content" class="skip-link">Skip to content</a>
 
@@ -259,11 +261,13 @@
         </div>
       </section>
     {:else}
+      <AssemblyHeader {models} {selectedModels} />
       <!-- Tab Navigation -->
       <div class="mb-8">
-        <div class="inline-flex p-1 bg-capitol-100 dark:bg-capitol-800/50 rounded-xl border border-capitol-200 dark:border-capitol-700">
+        <div class="assembly-tabs inline-flex p-1 bg-capitol-100 dark:bg-capitol-800/50 rounded-xl border border-capitol-200 dark:border-capitol-700" aria-label="Workspace views">
           <button
             on:click={() => activeTab = 'models'}
+            aria-pressed={activeTab === 'models'}
             class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'models' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -273,6 +277,7 @@
           </button>
           <button
             on:click={() => activeTab = 'personalities'}
+            aria-pressed={activeTab === 'personalities'}
             class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'personalities' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -282,6 +287,7 @@
           </button>
           <button
             on:click={() => activeTab = 'observability'}
+            aria-pressed={activeTab === 'observability'}
             class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 active:scale-[0.98] {activeTab === 'observability' ? 'bg-white dark:bg-capitol-700 text-capitol-900 dark:text-white shadow-sm' : 'text-capitol-600 dark:text-capitol-400 hover:text-capitol-900 dark:hover:text-white'}"
           >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

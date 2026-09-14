@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{svelte,js,ts,jsx,tsx}",
@@ -7,6 +8,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        capitol: {
+          50: '#f5f1e9', 100: '#ebe5db', 200: '#d8d0c3', 300: '#beb4a5',
+          400: '#aaa38f', 500: '#786d5e', 600: '#615646', 700: '#4c4235',
+          800: '#393d32', 900: '#262c23', 950: '#1b1e19',
+        },
+        gold: { 400: '#d2ba8a', 500: '#af925d', 600: '#7c693f' },
         // Primary Colors
         primary: {
           50: '#f0f9ff',

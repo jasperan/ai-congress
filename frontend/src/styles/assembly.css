@@ -1,0 +1,300 @@
+.congress-shell {
+  --color-capitol-50: #f5f1e9;
+  --color-capitol-100: #ebe5db;
+  --color-capitol-200: #d8d0c3;
+  --color-capitol-300: #beb4a5;
+  --color-capitol-400: #968a7a;
+  --color-capitol-500: #786d5e;
+  --color-capitol-600: #615646;
+  --color-capitol-700: #4c4235;
+  --color-capitol-800: #39362d;
+  --color-capitol-900: #262820;
+  --color-capitol-950: #1b1e19;
+  background: #f5f1e9;
+  color: #27291f;
+}
+.dark .congress-shell {
+  background: #1b1e19;
+  color: #eeeadf;
+}
+.congress-shell > nav {
+  background: #f5f1e9f2;
+  box-shadow: none !important;
+}
+.dark .congress-shell > nav {
+  background: #20251ef2;
+}
+.congress-shell .font-display {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.02em;
+}
+.congress-shell main {
+  padding-top: 36px;
+}
+.congress-shell button {
+  min-height: 40px;
+}
+.congress-shell :focus-visible {
+  outline: 2px solid #9d7541;
+  outline-offset: 4px;
+}
+.congress-shell .assembly-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 5px;
+  background: #e7e2d6;
+  border-color: #cfc6b5;
+  width: fit-content;
+  max-width: 100%;
+}
+.dark .congress-shell .assembly-tabs {
+  background: #2a3027;
+  border-color: #404737;
+}
+.assembly-tabs > button {
+  border-radius: 3px;
+  font-size: 12px;
+}
+.assembly-masthead {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 70px;
+  align-items: center;
+  padding-bottom: 38px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #bcb39f70;
+}
+.assembly-eyebrow {
+  font:
+    9px ui-monospace,
+    monospace;
+  letter-spacing: 2px;
+  color: #8f764e;
+}
+.assembly-masthead h2 {
+  font-size: clamp(38px, 4.3vw, 59px);
+  line-height: 1.06;
+  letter-spacing: -2px;
+  margin: 21px 0;
+  font-weight: 500;
+}
+.assembly-masthead h2 em {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  color: #7c693f;
+}
+.dark .assembly-masthead h2 em {
+  color: #d2ba8a;
+}
+.assembly-masthead > div > p:last-child {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #786f5e;
+}
+.dark .assembly-masthead > div > p:last-child {
+  color: #a9af9e;
+}
+.assembly-seats {
+  border: 1px solid #c7bfaa;
+  padding: 22px;
+  border-radius: 6px;
+  background: #eeeade;
+}
+.dark .assembly-seats {
+  border-color: #414b39;
+  background: #242b21;
+}
+.assembly-seat-heading {
+  display: flex;
+  justify-content: space-between;
+  font:
+    9px ui-monospace,
+    monospace;
+  letter-spacing: 1px;
+  color: #887a60;
+}
+.dark .assembly-seat-heading {
+  color: #bdc4ae;
+}
+.assembly-hemicycle {
+  height: 125px;
+  position: relative;
+  margin: 20px auto 0;
+  width: 270px;
+  max-width: 100%;
+}
+.assembly-hemicycle > span {
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  background: #b8b9a6;
+  transform: rotate(var(--angle)) translateX(115px)
+    rotate(calc(-1 * var(--angle)));
+}
+.assembly-hemicycle > span.seated {
+  background: #8c7950;
+}
+.dark .assembly-hemicycle > span {
+  background: #434e37;
+}
+.dark .assembly-hemicycle > span.seated {
+  background: #c5af79;
+}
+.assembly-hemicycle > b {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font:
+    48px/1 Georgia,
+    serif;
+}
+.assembly-hemicycle small {
+  display: block;
+  font:
+    10px ui-monospace,
+    monospace;
+  margin-top: 9px;
+  opacity: 0.65;
+}
+.assembly-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: center;
+  border-top: 1px solid #a7a08850;
+  padding-top: 16px;
+  margin-top: 20px;
+}
+.assembly-models > span {
+  font:
+    10px ui-monospace,
+    monospace;
+  padding: 5px 8px;
+  background: #a79c7830;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+.assembly-seats > p {
+  text-align: center;
+  font-size: 10px;
+  margin-top: 14px;
+  opacity: 0.65;
+}
+@media (max-width: 900px) {
+  .assembly-masthead {
+    gap: 30px;
+  }
+  .assembly-masthead h2 {
+    font-size: 43px;
+  }
+  .assembly-break {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .assembly-masthead {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-bottom: 25px;
+  }
+  .assembly-masthead h2 {
+    font-size: 44px;
+  }
+  .assembly-seats {
+    padding: 18px;
+  }
+  .congress-shell main {
+    padding: 28px 18px;
+  }
+  .assembly-tabs {
+    flex-wrap: wrap;
+  }
+  .assembly-tabs > button {
+    padding: 10px !important;
+    font-size: 11px;
+  }
+  .assembly-tabs > button svg {
+    display: none;
+  }
+}
+.congress-shell {
+  --color-surface-50: #faf7ef;
+  --color-surface-100: #eee9dd;
+  --color-surface-200: #e3ddce;
+  --color-border: #cfc6b5;
+  --color-border-strong: #a89a7f;
+  --color-primary-500: #645b40;
+  --color-primary-600: #4f4833;
+  --color-text-primary: #27291f;
+  --color-text-secondary: #615f50;
+  --color-text-tertiary: #746f5e;
+  --radius-xl: 6px;
+  --radius-lg: 4px;
+}
+.dark .congress-shell {
+  --color-surface-50: #242b21;
+  --color-surface-100: #2c3427;
+  --color-surface-200: #35402f;
+  --color-border: #414b39;
+  --color-border-strong: #637052;
+  --color-primary-500: #596344;
+  --color-primary-600: #697552;
+  --color-text-primary: #eeeadf;
+  --color-text-secondary: #c3c6b6;
+  --color-text-tertiary: #a9af9e;
+}
+.congress-shell .card,
+.congress-shell .card:hover {
+  box-shadow: none;
+}
+.congress-shell .btn-model.selected {
+  background: #d4c08f;
+  border-color: #d4c08f;
+  color: #2e3224;
+  box-shadow: none;
+}
+.congress-shell .btn-model.selected svg {
+  color: #445138;
+}
+.congress-shell .btn-model.selected:hover {
+  background: #e3d2a8;
+  border-color: #e3d2a8;
+}
+.congress-shell .input-field {
+  border-radius: 4px;
+}
+.congress-shell #swarm-mode {
+  max-width: 100%;
+}
+.congress-shell [role="img"][aria-label="AI Congress logo"] {
+  background: #b49b62;
+  box-shadow: none;
+}
+@media (max-width: 640px) {
+  .congress-shell #swarm-mode {
+    width: 100%;
+  }
+  .congress-shell .card .space-x-4 {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .congress-shell .card .space-x-4 > * {
+    margin-left: 0;
+  }
+  .congress-shell .card .space-x-4 {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .congress-shell * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
