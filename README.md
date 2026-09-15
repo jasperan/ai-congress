@@ -188,6 +188,49 @@ cd tui-rs && cargo build --release
 
 **Key bindings (global):** `F1` help, `Ctrl+C` quit. **Per-screen:** `Tab` toggle layout, `j/k` navigate, `Space` select, `Enter` proceed/inspect, `q/Esc` back.
 
+#### Terminal UI (Go)
+
+A second terminal front-end in the `charm.land` v2 stack (Bubble Tea, Lip Gloss, Bubbles, Huh).
+It is a peer client of the same FastAPI service the Python CLI, the Svelte frontend and the Rust TUI
+use — it never reimplements orchestration, voting or deliberation, so a Go user and a Python user get
+identical results.
+
+Its focus is the live council: per-member status as models generate, the vote tally as it fills in,
+round-by-round deliberation, and the full transcript once the run ends.
+
+```bash
+cd gotui && go build -o ai-congress-tui ./cmd/ai-congress-tui
+
+# Point it at a running service
+./ai-congress-tui --server http://localhost:8000
+
+# Or let it start the service for you
+./ai-congress-tui --start-service --port 8000
+```
+
+Scripted actions mirror the read endpoints, and `--json` makes them machine-readable:
+
+```bash
+./ai-congress-tui --health
+./ai-congress-tui --list-models
+./ai-congress-tui --list-triads
+./ai-congress-tui --standings
+./ai-congress-tui --control-room --json
+./ai-congress-tui --ask "Should AI systems be regulated by federal law?" \
+  --mode deliberation --triad architecture --evidence
+```
+
+Screens: connect, menu, convene (question, mode, council, triad, voting, backend, temperature, RAG,
+web search, evidence), live run, results (verdict, tally, rounds, transcript), model standings, control
+room, triads, and the model list.
+
+**Accessibility:** set `ACCESSIBLE=1` for plain one-question-at-a-time prompts instead of the
+full-screen UI. Without a terminal on stdin the binary refuses to start a prompt loop and asks for an
+action flag instead, so a pipe or a cron job can never hang on a question.
+
+**Keys:** `Tab`/`Shift+Tab` move between fields, `Enter` submits or confirms, `/` filters a list,
+`Space` toggles a selection, `Ctrl+C` quits (and stops any service this front-end started).
+
 #### Enhanced Mode (API)
 
 ```bash
